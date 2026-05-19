@@ -877,7 +877,7 @@ async function shareToX() {
   // Footer
   sc.fillStyle = "rgba(0,255,157,0.3)";
   sc.font = "9px 'Courier New'";
-  sc.fillText("RITUAL TESTNET  |  testnet.ritual.net", 28, 494);
+  sc.fillText("RITUAL TESTNET  |  0xeoe.github.io/ritual-tetris", 28, 494);
 
   // Convert to blob and download + open Twitter
   shareCanvas.toBlob(async (blob) => {
@@ -901,8 +901,10 @@ async function shareToX() {
     const tweet = encodeURIComponent(
       `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
       `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
-      `Mode: ${modeStr} | Network: RITUAL TESTNET\n\n` +
-      `#RitualTetris #RitualNetwork #OnChainGaming`
+      `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
+      `🕹️ Play here: https://0xEoE.github.io/ritual-tetris/\n\n` +
+      `@0xEyesofEtresia @Ritualnet\n` +
+      `#RitualTestnet`
     );
     window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
   }, "image/png");
