@@ -469,7 +469,7 @@ async function payEntry(mode) {
     alert("Connect wallet dulu!");
     return false;
   }
-  const fee = mode === "single" ? "0.001" : "0.003";
+  const fee = mode === "single" ? "0.001" : "0.005";
   try {
     const tx = mode === "single"
       ? await contract.enterSinglePlayer({ value: ethers.parseEther(fee) })
