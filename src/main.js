@@ -6,7 +6,7 @@
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
 
 // ── CONTRACT ──────────────────────────────────
-const CONTRACT_ADDRESS = "0xEda6b1db95768116683Bf2c2C99aEd633DBA344b";
+const CONTRACT_ADDRESS = "0xbd6dA7BCfB129A373615ADF8c5f68999Fd2911C8";
 const ABI = [
   "function enterSinglePlayer() payable",
   "function claimSinglePlayerReward(address player, uint256 score)",
@@ -469,7 +469,7 @@ async function payEntry(mode) {
     alert("Connect wallet dulu!");
     return false;
   }
-  const fee = mode === "single" ? "0.001" : "0.005";
+  const fee = mode === "single" ? "0.001" : "0.003";
   try {
     const tx = mode === "single"
       ? await contract.enterSinglePlayer({ value: ethers.parseEther(fee) })

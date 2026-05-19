@@ -57,7 +57,7 @@ ritual-tetris-frontend/
 
 🔗 Contract Address
 Ritual Chain Testnet
-0xEda6b1db95768116683Bf2c2C99aEd633DBA344b
+0xbd6dA7BCfB129A373615ADF8c5f68999Fd2911C8
 
 🌐 Deploy ke GitHub Pages
 
