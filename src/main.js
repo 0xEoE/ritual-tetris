@@ -19,6 +19,185 @@ const ABI = [
 let provider, signer, contract, currentMode;
 let opponentAddress = null;
 
+// ── RITUAL TESTNET CHAIN CONFIG ────────────────
+const RITUAL_TESTNET = {
+  chainId:     "0x7BB", // 1979 in decimal
+  chainName:   "Ritual Testnet",
+  nativeCurrency: { name: "RITUAL", symbol: "RITUAL", decimals: 18 },
+  rpcUrls:     ["https://rpc.ritualfoundation.org"],
+  blockExplorerUrls: ["https://explorer.ritualfoundation.org"],
+};
+
+// ── NETWORK GUARD ──────────────────────────────
+async function isCorrectNetwork() {
+  if (!window.ethereum) return false;
+  const chainId = await window.ethereum.request({ method: "eth_chainId" });
+  return chainId.toLowerCase() === RITUAL_TESTNET.chainId.toLowerCase();
+}
+
+async function switchToRitualTestnet() {
+  try {
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: RITUAL_TESTNET.chainId }],
+    });
+    return true;
+  } catch (err) {
+    if (err.code === 4902) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [RITUAL_TESTNET],
+        });
+        return true;
+      } catch (addErr) {
+        console.warn("Gagal menambahkan Ritual Testnet:", addErr.message);
+        return false;
+      }
+    }
+    console.warn("Gagal switch network:", err.message);
+    return false;
+  }
+}
+
+function showWrongNetworkOverlay() {
+  if (document.getElementById("wrongNetworkOverlay")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "wrongNetworkOverlay";
+  overlay.innerHTML = `
+    <div class="wn-modal">
+      <div class="wn-corner wn-tl"></div>
+      <div class="wn-corner wn-tr"></div>
+      <div class="wn-corner wn-bl"></div>
+      <div class="wn-corner wn-br"></div>
+      <div class="wn-icon">⚠</div>
+      <div class="wn-tag">// NETWORK ERROR</div>
+      <div class="wn-title">WRONG NETWORK</div>
+      <div class="wn-divider"></div>
+      <div class="wn-body">
+        Ritual Tetris <b>hanya berjalan</b> di jaringan<br>
+        <span class="wn-highlight">RITUAL TESTNET</span><br><br>
+        Jaringan lain (termasuk Mainnet) <b>tidak didukung</b><br>
+        demi keamanan aset kamu.
+      </div>
+      <div class="wn-divider"></div>
+      <div class="wn-info-row">
+        <span class="wn-lbl">CHAIN ID</span>
+        <span class="wn-val">1979</span>
+      </div>
+      <div class="wn-info-row">
+        <span class="wn-lbl">NETWORK</span>
+        <span class="wn-val">RITUAL TESTNET</span>
+      </div>
+      <div class="wn-divider"></div>
+      <button id="wnSwitchBtn" class="ritual-btn">
+        ⇄ SWITCH TO RITUAL TESTNET
+      </button>
+    </div>
+  `;
+
+  if (!document.getElementById("wrongNetworkStyles")) {
+    const s = document.createElement("style");
+    s.id = "wrongNetworkStyles";
+    s.textContent = `
+      #wrongNetworkOverlay {
+        position: fixed; inset: 0; z-index: 2000;
+        background: rgba(0,0,0,0.92);
+        backdrop-filter: blur(8px);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .wn-modal {
+        position: relative;
+        background: #060606;
+        border: 1px solid rgba(255,51,102,0.5);
+        box-shadow: 0 0 60px rgba(255,51,102,0.12), 0 0 0 1px rgba(255,51,102,0.08);
+        padding: 36px 40px;
+        max-width: 420px; width: 90%;
+        text-align: center;
+        font-family: 'Share Tech Mono', monospace;
+      }
+      .wn-corner {
+        position: absolute; width: 12px; height: 12px;
+        border-color: #ff3366; border-style: solid;
+      }
+      .wn-tl { top:-1px; left:-1px;   border-width: 2px 0 0 2px; }
+      .wn-tr { top:-1px; right:-1px;  border-width: 2px 2px 0 0; }
+      .wn-bl { bottom:-1px; left:-1px;  border-width: 0 0 2px 2px; }
+      .wn-br { bottom:-1px; right:-1px; border-width: 0 2px 2px 0; }
+      .wn-icon {
+        font-size: 2.4rem; color: #ff3366;
+        text-shadow: 0 0 20px rgba(255,51,102,0.6);
+        margin-bottom: 8px;
+        animation: wnPulse 2s infinite;
+      }
+      @keyframes wnPulse { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+      .wn-tag {
+        font-size: 0.6rem; letter-spacing: 4px;
+        color: rgba(255,51,102,0.5); margin-bottom: 6px;
+      }
+      .wn-title {
+        font-family: 'Orbitron', monospace;
+        font-size: 1.8rem; font-weight: 900;
+        color: #ff3366; letter-spacing: 6px;
+        text-shadow: 0 0 30px rgba(255,51,102,0.4);
+        margin-bottom: 4px;
+      }
+      .wn-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,51,102,0.25), transparent);
+        margin: 16px 0;
+      }
+      .wn-body {
+        font-size: 0.75rem; color: rgba(204,255,0,0.55);
+        letter-spacing: 1px; line-height: 1.9;
+      }
+      .wn-highlight {
+        color: #00ff9d; font-size: 0.85rem;
+        letter-spacing: 3px;
+      }
+      .wn-info-row {
+        display: flex; justify-content: space-between;
+        align-items: center; margin: 8px 0; text-align: left;
+      }
+      .wn-lbl { font-size: 0.6rem; letter-spacing: 2px; color: rgba(204,255,0,0.3); }
+      .wn-val { font-size: 0.72rem; letter-spacing: 1px; color: #ccff00; }
+      #wnSwitchBtn {
+        width: 100%; margin-top: 4px;
+        border-color: #00ff9d !important; color: #00ff9d !important;
+        letter-spacing: 2px; padding: 14px 20px;
+        font-size: 0.8rem;
+      }
+      #wnSwitchBtn:hover {
+        background: rgba(0,255,157,0.1) !important;
+        box-shadow: 0 0 20px rgba(0,255,157,0.2) !important;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  document.body.appendChild(overlay);
+  document.getElementById("wnSwitchBtn").addEventListener("click", async () => {
+    const ok = await switchToRitualTestnet();
+    if (ok) hideWrongNetworkOverlay();
+  });
+}
+
+function hideWrongNetworkOverlay() {
+  const el = document.getElementById("wrongNetworkOverlay");
+  if (el) el.remove();
+}
+
+// React to user manually switching network in MetaMask
+if (window.ethereum) {
+  window.ethereum.on("chainChanged", (chainId) => {
+    if (chainId.toLowerCase() === RITUAL_TESTNET.chainId.toLowerCase()) {
+      hideWrongNetworkOverlay();
+    } else {
+      showWrongNetworkOverlay();
+    }
+  });
+}
+
 // ══════════════════════════════════════════════
 //  FIREBASE REALTIME DB — Cross-browser PVP Transport
 //  Replace FIREBASE_URL with your own project's DB URL.
@@ -1383,10 +1562,26 @@ async function connectWallet() {
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
     await provider.send("eth_requestAccounts", []);
+
+    // ── NETWORK CHECK ──────────────────────────
+    const onCorrectNetwork = await isCorrectNetwork();
+    if (!onCorrectNetwork) {
+      // Coba switch otomatis dulu
+      const switched = await switchToRitualTestnet();
+      if (!switched) {
+        // Gagal switch → tampilkan overlay blokir
+        showWrongNetworkOverlay();
+        return;
+      }
+      // Re-init provider setelah switch
+      provider = new ethers.BrowserProvider(window.ethereum);
+    }
+    // ──────────────────────────────────────────
+
     signer   = await provider.getSigner();
     contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
     const addr = await signer.getAddress();
-    myWalletAddr = addr; // store globally for matchmaking
+    myWalletAddr = addr;
     const btn  = document.getElementById("connectBtn");
     const dot  = document.getElementById("statusDot");
     btn.innerHTML = `✅ ${addr.slice(0,6)}…${addr.slice(-4)}`;
