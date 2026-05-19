@@ -75,10 +75,10 @@ function showWrongNetworkOverlay() {
       <div class="wn-title">WRONG NETWORK</div>
       <div class="wn-divider"></div>
       <div class="wn-body">
-        Ritual Tetris <b>hanya berjalan</b> di jaringan<br>
+        Ritual Tetris <b>only runs</b> on the<br>
         <span class="wn-highlight">RITUAL TESTNET</span><br><br>
-        Jaringan lain (termasuk Mainnet) <b>tidak didukung</b><br>
-        demi keamanan aset kamu.
+        Other networks (including Mainnet) are <b>not supported</b><br>
+        to keep your assets safe.
       </div>
       <div class="wn-divider"></div>
       <div class="wn-info-row">
