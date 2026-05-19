@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RITUAL TETRIS</title>
+  
+  <!-- Tab Icon (Favicon) -->
+  <link rel="icon" type="image/png" href="/ritual-tab-icon.png">
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
@@ -97,6 +101,12 @@
       display: flex;
       align-items: center;
       gap: 14px;
+    }
+
+    /* Logo Image */
+    .logo-img {
+      height: 48px;
+      filter: drop-shadow(0 0 10px var(--gold));
     }
 
     .logo-symbol {
@@ -443,7 +453,8 @@
 
     <header class="terminal-header">
       <div class="logo-container">
-        <div class="logo-symbol">⬡</div>
+        <!-- Logo Image -->
+        <img src="/ritual-logo.png" alt="Ritual Logo" class="logo-img">
         <div>
           <div class="section-label">// ON-CHAIN GAMING</div>
           <h1><span>[RITUAL]</span> TETRIS</h1>
@@ -550,27 +561,28 @@
   </div>
 
   <script type="module" src="src/main.js"></script>
+  <!-- Background script tetap sama -->
   <script>
-    // ── BACKGROUND: Falling Tetris Blocks ──
+    // Background script dari Claude (tetap sama)
     const bgCanvas = document.getElementById('bgCanvas');
     const ctx = bgCanvas.getContext('2d');
     const CELL = 28;
 
     const PIECES = [
-      { shape: [[1,1,1,1]], color: 'rgba(0,255,157,' },         // I - green
-      { shape: [[1,1],[1,1]], color: 'rgba(255,204,0,' },        // O - gold
-      { shape: [[0,1,0],[1,1,1]], color: 'rgba(204,255,0,' },    // T - lime
-      { shape: [[1,0],[1,0],[1,1]], color: 'rgba(0,200,255,' },  // L - cyan
-      { shape: [[0,1],[0,1],[1,1]], color: 'rgba(255,0,204,' },  // J - pink
-      { shape: [[0,1,1],[1,1,0]], color: 'rgba(0,255,157,' },    // S - green
-      { shape: [[1,1,0],[0,1,1]], color: 'rgba(255,100,0,' },    // Z - orange
+      { shape: [[1,1,1,1]], color: 'rgba(0,255,157,' },
+      { shape: [[1,1],[1,1]], color: 'rgba(255,204,0,' },
+      { shape: [[0,1,0],[1,1,1]], color: 'rgba(204,255,0,' },
+      { shape: [[1,0],[1,0],[1,1]], color: 'rgba(0,200,255,' },
+      { shape: [[0,1],[0,1],[1,1]], color: 'rgba(255,0,204,' },
+      { shape: [[0,1,1],[1,1,0]], color: 'rgba(0,255,157,' },
+      { shape: [[1,1,0],[0,1,1]], color: 'rgba(255,100,0,' },
     ];
 
     let pieces = [];
     let W, H;
 
     function resize() {
-      W = bgCanvas.width  = window.innerWidth;
+      W = bgCanvas.width = window.innerWidth;
       H = bgCanvas.height = window.innerHeight;
     }
     resize();
@@ -592,10 +604,9 @@
       };
     }
 
-    // Spawn initial pieces
     for (let i = 0; i < 18; i++) {
       const p = spawnPiece();
-      p.y = Math.random() * H;  // scatter on load
+      p.y = Math.random() * H;
       pieces.push(p);
     }
 
@@ -614,16 +625,13 @@
           const px = p.x + c * s;
           const py = p.y + r * s;
 
-          // Fill
           ctx.fillStyle = p.color + p.opacity + ')';
           ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
 
-          // Border
           ctx.strokeStyle = p.color + (p.opacity * 3) + ')';
           ctx.lineWidth = 0.8;
           ctx.strokeRect(px + 1, py + 1, s - 2, s - 2);
 
-          // Inner highlight (top-left edge)
           ctx.fillStyle = p.color + (p.opacity * 2.5) + ')';
           ctx.fillRect(px + 2, py + 2, s - 4, 1.5);
           ctx.fillRect(px + 2, py + 2, 1.5, s - 4);
@@ -634,30 +642,25 @@
 
     function animate() {
       ctx.clearRect(0, 0, W, H);
-
       pieces.forEach((p, i) => {
         p.y += p.speed;
         p.rotation += p.rotSpeed;
-
         if (p.y > H + CELL * 5) {
           pieces[i] = spawnPiece();
         }
-
         drawPiece(p);
       });
-
-      // Occasionally spawn extra piece if below max
       if (pieces.length < 22 && Math.random() < 0.003) {
         pieces.push(spawnPiece());
       }
-
       requestAnimationFrame(animate);
     }
 
     animate();
   </script>
+
   <script>
-    // UI interactions preview (tanpa main.js)
+    // UI interactions preview
     document.getElementById('singleBtn').addEventListener('click', function() {
       document.getElementById('modeScreen').classList.add('hidden');
       document.getElementById('gameScreen').classList.remove('hidden');
