@@ -17,25 +17,106 @@ const ABI = [
 ];
 
 let provider, signer, contract, currentMode;
-let pvpMatchId = null;
-let pvpRole = null; // "host" | "guest"
 let opponentAddress = null;
+
+// ══════════════════════════════════════════════
+//  FIREBASE REALTIME DB — Cross-browser PVP Transport
+//  Replace FIREBASE_URL with your own project's DB URL.
+//  Free Spark plan is more than enough for testnet scale.
+// ══════════════════════════════════════════════
+const FIREBASE_URL = "https://ritual-tetris-default-rtdb.asia-southeast1.firebasedatabase.app"; // ✅ No trailing slash
+
+// Thin REST wrapper — no SDK needed, pure fetch
+const FB = {
+  // Write / overwrite a path
+  async set(path, data) {
+    await fetch(`${FIREBASE_URL}/${path}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  },
+  // Patch / merge fields at a path
+  async update(path, data) {
+    await fetch(`${FIREBASE_URL}/${path}.json`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  },
+  // One-time read
+  async get(path) {
+    const r = await fetch(`${FIREBASE_URL}/${path}.json`);
+    return r.json();
+  },
+  // Delete a path
+  async remove(path) {
+    await fetch(`${FIREBASE_URL}/${path}.json`, { method: "DELETE" });
+  },
+  // Long-poll listener (Server-Sent Events) — fires callback on every change
+  listen(path, callback) {
+    // SSE requires Accept header — EventSource handles this automatically
+    // Firebase REST SSE works without auth when rules are .read: true
+    const es = new EventSource(`${FIREBASE_URL}/${path}.json`);
+    es.addEventListener("put",   e => { try { callback(JSON.parse(e.data)); } catch(_) {} });
+    es.addEventListener("patch", e => { try { callback(JSON.parse(e.data)); } catch(_) {} });
+    es.onerror = () => {}; // silently reconnect
+    return es; // caller holds reference to close()
+  },
+};
+
+// Active Firebase listeners — kept so we can close them on cleanup
+let fbMatchListener   = null;  // listens to matches/{matchId}
+let fbBoardListener   = null;  // listens to boards/{matchId}/opponent
+
+let pvpMatchId = null;
+let pvpRole    = null; // "host" | "guest"
 let pvpSyncInterval = null;
+let myWalletAddr = null; // set on wallet connect
 
-// ── PVP STATE SYNC (Firebase Realtime DB or localStorage fallback) ──
-// For production, swap this with a Firestore/Supabase/Pusher channel.
-// Here we use BroadcastChannel (works across tabs of same origin, demo-safe).
-let pvpChannel = null;
-
-function initPvpChannel(matchId) {
-  if (pvpChannel) pvpChannel.close();
-  pvpChannel = new BroadcastChannel(`ritual_pvp_${matchId}`);
-  pvpChannel.onmessage = handlePvpMessage;
+// ── SEND any PVP event to Firebase ────────────
+async function sendPvpUpdate(type, payload) {
+  if (!pvpMatchId || !pvpRole) return;
+  const path = `matches/${pvpMatchId}/events/${pvpRole}`;
+  await FB.set(path, { type, payload, ts: Date.now() });
 }
 
-function sendPvpUpdate(type, payload) {
-  if (!pvpChannel) return;
-  pvpChannel.postMessage({ type, payload, from: pvpRole });
+// ── Init listeners once match is established ──
+function initPvpListeners() {
+  // Close any old listeners
+  if (fbMatchListener) { fbMatchListener.close(); fbMatchListener = null; }
+  if (fbBoardListener) { fbBoardListener.close(); fbBoardListener = null; }
+
+  const oppRole = pvpRole === "host" ? "guest" : "host";
+
+  // 1. Listen for opponent match events (GAME_OVER, etc.)
+  fbMatchListener = FB.listen(`matches/${pvpMatchId}/events/${oppRole}`, (data) => {
+    if (!data || !data.data) return;
+    handlePvpMessage(data.data);
+  });
+
+  // 2. Listen for opponent board state
+  fbBoardListener = FB.listen(`boards/${pvpMatchId}/${oppRole}`, (data) => {
+    if (!data || !data.data) return;
+    const state = data.data;
+    if (state && state.board) {
+      opponentBoard = state.board;
+      opponentScore = state.score || 0;
+      opponentLines = state.lines || 0;
+      drawOpponentBoard();
+    }
+  });
+}
+
+// ── Cleanup Firebase on game end / quit ───────
+async function cleanupPvp() {
+  if (fbMatchListener) { fbMatchListener.close(); fbMatchListener = null; }
+  if (fbBoardListener) { fbBoardListener.close(); fbBoardListener = null; }
+  clearInterval(pvpSyncInterval);
+  // Remove our board state from Firebase
+  if (pvpMatchId && pvpRole) {
+    await FB.remove(`boards/${pvpMatchId}/${pvpRole}`);
+  }
 }
 
 // ── TETRIS SETTINGS ───────────────────────────
@@ -336,43 +417,37 @@ function startGame(mode) {
   }
 }
 
-// ── PVP SYNC ──────────────────────────────────
-function syncBoardToPvp() {
-  sendPvpUpdate("BOARD_UPDATE", {
+// ── PVP SYNC — push my board state to Firebase ─
+async function syncBoardToPvp() {
+  if (!pvpMatchId || !pvpRole) return;
+  // Write board state to Firebase; opponent's SSE listener picks it up in ~100-300ms
+  await FB.set(`boards/${pvpMatchId}/${pvpRole}`, {
     board: board,
     score: score,
     lines: lines,
-    level: level
+    level: level,
+    ts: Date.now(),
   });
 }
 
-function handlePvpMessage(event) {
-  const { type, payload, from } = event.data;
-  if (from === pvpRole) return; // ignore own messages
+// ── Handle incoming opponent events from Firebase ─
+function handlePvpMessage(msg) {
+  if (!msg || !msg.type) return;
+  const { type, payload } = msg;
 
-  if (type === "BOARD_UPDATE") {
-    opponentBoard = payload.board;
-    opponentScore = payload.score;
-    opponentLines = payload.lines;
-    drawOpponentBoard();
-    // Update opponent score in UI
-    const oppEl = document.getElementById("oppScoreVal");
-    if (oppEl) oppEl.textContent = String(opponentScore).padStart(5, "0");
-  } else if (type === "GAME_OVER") {
+  if (type === "GAME_OVER") {
     opponentFinished = true;
     opponentScore    = payload.score;
     opponentLines    = payload.lines;
     drawOpponentBoard();
-    // If I'm still playing, I win!
     if (gameRunning) {
-      // Show live notification
       showPvpNotif("OPPONENT FINISHED — KEEP GOING TO SECURE YOUR SCORE!");
     } else {
       showResult("pvp");
     }
   } else if (type === "OPPONENT_JOINED") {
     closePvpWaiting();
-    startGame("pvp");
+    if (!gameRunning) startGame("pvp");
   }
 }
 
@@ -963,10 +1038,22 @@ function injectResultStyles() {
 }
 
 // ══════════════════════════════════════════════
-//  PVP WAITING ROOM
+//  PVP WAITING ROOM — Firebase Auto-Matchmaking
 // ══════════════════════════════════════════════
 
-function showPvpWaiting() {
+// How matchmaking works:
+//   1. User A (host) → writes to Firebase: lobbies/open/{matchId} = { hostAddr, ts }
+//   2. User B (guest) → reads Firebase: find any open lobby, join it
+//   3. Both now share the same matchId → Firebase board sync starts
+//   Timeout: 90 seconds. If no opponent found → show error + refund prompt.
+
+const MATCHMAKE_TIMEOUT_MS = 90_000; // 90 seconds
+let matchmakeTimer = null;
+let waitingLobbyListener = null; // SSE listener for lobby status
+let waitingElapsed = 0;
+let waitingTickInterval = null;
+
+async function showPvpWaiting() {
   let overlay = document.getElementById("pvpWaitingOverlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -974,11 +1061,6 @@ function showPvpWaiting() {
     injectWaitingStyles();
     document.body.appendChild(overlay);
   }
-
-  // Generate a simple local match ID (demo: timestamp-based)
-  // In production, this comes from createPvPMatch() tx result
-  const demoMatchId = pvpMatchId || `M${Date.now().toString(36).toUpperCase()}`;
-  pvpMatchId = demoMatchId;
 
   overlay.innerHTML = `
     <div class="pvp-wait-modal">
@@ -1002,7 +1084,7 @@ function showPvpWaiting() {
       <div class="pvp-wait-info">
         <div class="pvp-wait-row">
           <span class="pvp-wait-lbl">MATCH ID</span>
-          <span class="pvp-wait-val" id="pvpMatchIdDisplay">${demoMatchId}</span>
+          <span class="pvp-wait-val" id="pvpMatchIdDisplay">—</span>
         </div>
         <div class="pvp-wait-row">
           <span class="pvp-wait-lbl">ENTRY FEE</span>
@@ -1012,14 +1094,18 @@ function showPvpWaiting() {
           <span class="pvp-wait-lbl">STATUS</span>
           <span class="pvp-wait-val pvp-blink" id="pvpStatus">SEARCHING…</span>
         </div>
+        <div class="pvp-wait-row">
+          <span class="pvp-wait-lbl">TIMEOUT</span>
+          <span class="pvp-wait-val" id="pvpCountdown" style="color:rgba(204,255,0,0.5)">1:30</span>
+        </div>
       </div>
 
       <div class="pvp-wait-divider"></div>
 
       <div style="font-size:0.6rem;letter-spacing:1px;color:rgba(0,255,157,0.3);
            text-align:center;margin-bottom:20px;line-height:1.8;">
-        SHARE THIS MATCH ID WITH YOUR OPPONENT<br>
-        OR WAIT FOR AUTO-MATCHMAKING
+        AUTO-MATCHMAKING ACTIVE<br>
+        OPPONENT WILL BE FOUND WITHIN 90 SECONDS
       </div>
 
       <div style="display:flex;gap:10px;">
@@ -1036,66 +1122,147 @@ function showPvpWaiting() {
   overlay.classList.add("visible");
   document.body.style.overflow = "hidden";
 
-  // Init BroadcastChannel as host
-  pvpRole = "host";
-  initPvpChannel(pvpMatchId);
+  // ── STEP 1: Try to find an existing open lobby first (guest path) ──
+  let joinedExisting = false;
+  try {
+    const openLobbies = await FB.get("lobbies/open");
+    if (openLobbies) {
+      // Find a lobby that is NOT ours (different wallet address)
+      const entries = Object.entries(openLobbies);
+      for (const [lobbyMatchId, lobbyData] of entries) {
+        // Skip if it's our own lobby (same wallet) or stale (older than 3 min)
+        const isOurs  = myWalletAddr && lobbyData.hostAddr === myWalletAddr;
+        const isStale = Date.now() - (lobbyData.ts || 0) > 180_000;
+        if (!isOurs && !isStale) {
+          // Found a lobby to join!
+          joinedExisting = true;
+          pvpMatchId = lobbyMatchId;
+          pvpRole    = "guest";
+          document.getElementById("pvpMatchIdDisplay").textContent = pvpMatchId;
 
-  // Listen for guest joining
-  pvpChannel.onmessage = (event) => {
-    const { type } = event.data;
-    if (type === "GUEST_JOIN") {
-      const statusEl = document.getElementById("pvpStatus");
-      if (statusEl) {
-        statusEl.textContent = "OPPONENT FOUND!";
-        statusEl.style.color = "#00ff9d";
-        statusEl.style.animation = "none";
+          // Remove lobby from open list (it's now taken)
+          await FB.remove(`lobbies/open/${pvpMatchId}`);
+          // Write to match so host knows guest joined
+          await sendPvpUpdate("OPPONENT_JOINED", { guestAddr: myWalletAddr || "anonymous" });
+
+          // Init Firebase board listeners
+          initPvpListeners();
+          updatePvpStatus("OPPONENT FOUND!", "#00ff9d");
+          setTimeout(() => {
+            closePvpWaiting();
+            startGame("pvp");
+          }, 1200);
+          break;
+        }
       }
-      // Send signal to guest to start
-      sendPvpUpdate("OPPONENT_JOINED", {});
-      setTimeout(() => {
-        closePvpWaiting();
-        startGame("pvp");
-      }, 1200);
     }
-  };
+  } catch(e) {
+    console.warn("Lobby search failed:", e);
+  }
 
-  // Copy match ID
+  if (!joinedExisting) {
+    // ── STEP 2: No open lobby found — become the host, post our lobby ──
+    pvpRole    = "host";
+    pvpMatchId = `M${Date.now().toString(36).toUpperCase()}`;
+    document.getElementById("pvpMatchIdDisplay").textContent = pvpMatchId;
+
+    try {
+      await FB.set(`lobbies/open/${pvpMatchId}`, {
+        hostAddr: myWalletAddr || "anonymous",
+        ts: Date.now(),
+      });
+    } catch(e) {
+      console.warn("Could not post lobby:", e);
+    }
+
+    // Init board listeners so we're ready when guest joins
+    initPvpListeners();
+
+    // ── STEP 3: Poll Firebase match events — wait for OPPONENT_JOINED ──
+    // initPvpListeners() already listens on matches/{matchId}/events/guest
+    // handlePvpMessage will call closePvpWaiting + startGame when guest fires
+
+    // Countdown ticker
+    waitingElapsed = 0;
+    clearInterval(waitingTickInterval);
+    waitingTickInterval = setInterval(() => {
+      waitingElapsed += 1000;
+      const remaining = Math.max(0, MATCHMAKE_TIMEOUT_MS - waitingElapsed);
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      const el = document.getElementById("pvpCountdown");
+      if (el) el.textContent = `${mins}:${secs.toString().padStart(2,"0")}`;
+
+      // Pulse status text every 5s for feedback
+      if (waitingElapsed % 5000 === 0) {
+        const dots = ".".repeat(((waitingElapsed / 5000) % 3) + 1);
+        const statusEl = document.getElementById("pvpStatus");
+        if (statusEl && statusEl.textContent.startsWith("SEARCHING")) {
+          statusEl.textContent = `SEARCHING${dots}`;
+        }
+      }
+
+      if (waitingElapsed >= MATCHMAKE_TIMEOUT_MS) {
+        clearInterval(waitingTickInterval);
+        onMatchmakeTimeout();
+      }
+    }, 1000);
+  }
+
+  // Copy match ID button
   overlay.querySelector("#pvpShareMatchBtn").addEventListener("click", () => {
-    navigator.clipboard?.writeText(demoMatchId).catch(() => {});
+    navigator.clipboard?.writeText(pvpMatchId || "").catch(() => {});
     const btn = overlay.querySelector("#pvpShareMatchBtn");
     btn.textContent = "✓ COPIED!";
     setTimeout(() => btn.textContent = "📋 COPY MATCH ID", 2000);
   });
 
-  overlay.querySelector("#pvpCancelBtn").addEventListener("click", () => {
-    closePvpWaiting();
-    if (pvpChannel) pvpChannel.close();
-  });
-
-  // Auto-matchmaking simulation (demo): after 8s, attempt to pair with another open tab
-  // In production this would use a signaling server / smart contract event
-  setTimeout(() => {
-    if (overlay.classList.contains("visible")) {
-      // Check if a guest has already connected (BroadcastChannel)
-      // If not, show "still waiting" message — no auto-close
-      const statusEl = document.getElementById("pvpStatus");
-      if (statusEl && statusEl.textContent === "SEARCHING…") {
-        statusEl.textContent = "STILL SEARCHING…";
-      }
+  // Cancel button
+  overlay.querySelector("#pvpCancelBtn").addEventListener("click", async () => {
+    clearInterval(waitingTickInterval);
+    clearTimeout(matchmakeTimer);
+    if (pvpRole === "host" && pvpMatchId) {
+      await FB.remove(`lobbies/open/${pvpMatchId}`).catch(() => {});
     }
-  }, 8000);
+    closePvpWaiting();
+  });
 }
 
-// For guest joining (called when user pastes a match ID or auto-matched)
-window.joinPvpAsGuest = function(matchId) {
+function updatePvpStatus(text, color = "#ccff00") {
+  const el = document.getElementById("pvpStatus");
+  if (!el) return;
+  el.textContent  = text;
+  el.style.color  = color;
+  el.style.animation = color === "#00ff9d" ? "none" : "";
+}
+
+function onMatchmakeTimeout() {
+  updatePvpStatus("NO OPPONENT FOUND", "#ff3366");
+  // Clean up our lobby listing
+  if (pvpRole === "host" && pvpMatchId) {
+    FB.remove(`lobbies/open/${pvpMatchId}`).catch(() => {});
+  }
+  // Show timeout message inside modal
+  const infoDiv = document.querySelector(".pvp-wait-info");
+  if (infoDiv) {
+    const msg = document.createElement("div");
+    msg.style.cssText = "margin-top:14px;font-size:0.62rem;letter-spacing:1px;color:#ff3366;text-align:center;line-height:1.7;";
+    msg.innerHTML = "MATCHMAKING TIMED OUT (90s)<br>NO OPPONENTS AVAILABLE RIGHT NOW.<br><span style=\"color:rgba(204,255,0,0.4)\">TRY AGAIN OR INVITE A FRIEND.</span>";
+    infoDiv.appendChild(msg);
+  }
+}
+
+// ── Manual join by Match ID (e.g. from shared link) ──
+window.joinPvpByMatchId = async function(matchId) {
   pvpMatchId = matchId;
   pvpRole    = "guest";
-  initPvpChannel(matchId);
-  sendPvpUpdate("GUEST_JOIN", {});
+  // Remove from open lobbies
+  await FB.remove(`lobbies/open/${matchId}`).catch(() => {});
+  await sendPvpUpdate("OPPONENT_JOINED", { guestAddr: myWalletAddr || "anonymous" });
+  initPvpListeners();
   closePvpWaiting();
   startGame("pvp");
 };
-
 function closePvpWaiting() {
   const overlay = document.getElementById("pvpWaitingOverlay");
   if (overlay) {
@@ -1217,6 +1384,7 @@ async function connectWallet() {
     signer   = await provider.getSigner();
     contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
     const addr = await signer.getAddress();
+    myWalletAddr = addr; // store globally for matchmaking
     const btn  = document.getElementById("connectBtn");
     const dot  = document.getElementById("statusDot");
     btn.innerHTML = `✅ ${addr.slice(0,6)}…${addr.slice(-4)}`;
@@ -1277,16 +1445,16 @@ document.getElementById("singleBtn").addEventListener("click", async () => {
 
 document.getElementById("pvpBtn").addEventListener("click", async () => {
   if (await payEntry("pvp")) {
-    pvpRole = "host";
+    pvpMatchId = null; // reset, will be assigned in showPvpWaiting
+    pvpRole    = null;
     showPvpWaiting();
   }
 });
 
-document.getElementById("quitBtn").addEventListener("click", () => {
+document.getElementById("quitBtn").addEventListener("click", async () => {
   gameRunning = false;
   cancelAnimationFrame(animFrameId);
-  clearInterval(pvpSyncInterval);
-  if (pvpChannel) pvpChannel.close();
+  await cleanupPvp();
   showScreen("modeScreen");
 });
 
