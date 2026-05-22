@@ -7,10 +7,11 @@
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
 
 // ── CONTRACT ──────────────────────────────────
-const CONTRACT_ADDRESS = "0x1bDC3F4b7FE16d09ed36BC233087c3b7077D3302";
+const CONTRACT_ADDRESS = "0x56306dc9A61790ca7aaCC97edC50E320DB44fcF5";
 const ABI = [
   "function enterSinglePlayer() payable",
-  "function claimSinglePlayerReward(address player, uint256 score)",
+  "function claimSinglePlayerReward(uint256 score, uint256 nonce)",
+  "function claimNonce(address) view returns (uint256)",
   "function createPvPMatch() payable returns (uint256)",
   "function joinPvPMatch(uint256 matchId) payable",
   "function cancelPvPMatch(uint256 matchId)",
@@ -1691,11 +1692,14 @@ async function payEntry(mode) {
 async function claimSingleReward() {
   try {
     const addr = await signer.getAddress();
-    const tx = await contract.claimSinglePlayerReward(addr, score);
+    // Ambil nonce terkini dari contract — mencegah double-claim
+    const nonce = await contract.claimNonce(addr);
+    const tx = await contract.claimSinglePlayerReward(score, nonce);
     await tx.wait();
-    console.log("Single reward claimed!");
+    console.log("✅ Single reward claimed! Nonce:", nonce.toString());
   } catch(e) {
     console.warn("Claim failed:", e.message);
+    alert("Claim gagal: " + e.message);
   }
 }
 
