@@ -7,13 +7,17 @@
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
 
 // ── CONTRACT ──────────────────────────────────
-const CONTRACT_ADDRESS = "0xbd6dA7BCfB129A373615ADF8c5f68999Fd2911C8";
+const CONTRACT_ADDRESS = "0x1bDC3F4b7FE16d09ed36BC233087c3b7077D3302";
 const ABI = [
   "function enterSinglePlayer() payable",
   "function claimSinglePlayerReward(address player, uint256 score)",
   "function createPvPMatch() payable returns (uint256)",
   "function joinPvPMatch(uint256 matchId) payable",
-  "function claimPvPReward(uint256 matchId, address winner)"
+  "function cancelPvPMatch(uint256 matchId)",
+  "function claimPvPReward(uint256 matchId, address winner)",
+  "event PvPMatchCreated(uint256 indexed matchId, address indexed player1)",
+  "event PvPMatchJoined(uint256 indexed matchId, address indexed player2)",
+  "event PvPMatchCancelled(uint256 indexed matchId, address indexed player1, uint256 refundAmount)"
 ];
 
 let provider, signer, contract, currentMode;
@@ -1233,6 +1237,7 @@ let matchmakeTimer = null;
 let waitingLobbyListener = null; // SSE listener for lobby status
 let waitingElapsed = 0;
 let waitingTickInterval = null;
+let hostOnChainMatchId = null; // on-chain matchId milik host, dipakai untuk refund
 
 async function showPvpWaiting() {
   let overlay = document.getElementById("pvpWaitingOverlay");
@@ -1308,25 +1313,45 @@ async function showPvpWaiting() {
   try {
     const openLobbies = await FB.get("lobbies/open");
     if (openLobbies) {
-      // Find a lobby that is NOT ours (different wallet address)
       const entries = Object.entries(openLobbies);
       for (const [lobbyMatchId, lobbyData] of entries) {
-        // Skip if it's our own lobby (same wallet) or stale (older than 3 min)
         const isOurs  = myWalletAddr && lobbyData.hostAddr === myWalletAddr;
         const isStale = Date.now() - (lobbyData.ts || 0) > 180_000;
         if (!isOurs && !isStale) {
-          // Found a lobby to join!
           joinedExisting = true;
-          pvpMatchId = lobbyMatchId;
+          pvpMatchId = lobbyMatchId;   // Firebase key, misal "M5"
           pvpRole    = "guest";
           document.getElementById("pvpMatchIdDisplay").textContent = pvpMatchId;
 
-          // Remove lobby from open list (it's now taken)
-          await FB.remove(`lobbies/open/${pvpMatchId}`);
-          // Write to match so host knows guest joined
-          await sendPvpUpdate("OPPONENT_JOINED", { guestAddr: myWalletAddr || "anonymous" });
+          // Ambil onChainMatchId yang disimpan host
+          const onChainMatchId = lobbyData.onChainMatchId;
+          if (onChainMatchId === undefined || onChainMatchId === null) {
+            console.warn("onChainMatchId tidak ditemukan di lobby data");
+            joinedExisting = false;
+            break;
+          }
 
-          // Init Firebase board listeners
+    // ── GUEST: bayar ke contract dan join match on-chain ──
+          updatePvpStatus("JOINING MATCH ON-CHAIN…", "#ffcc00");
+          try {
+            const tx = await contract.joinPvPMatch(onChainMatchId, {
+              value: ethers.parseEther("0.005")
+            });
+            await tx.wait();
+          } catch(contractErr) {
+            alert("Gagal join match on-chain: " + contractErr.message);
+            joinedExisting = false;
+            break;
+          }
+
+          // Hapus dari lobby setelah berhasil join
+          await FB.remove(`lobbies/open/${pvpMatchId}`);
+          // Beritahu host bahwa guest sudah join
+          await sendPvpUpdate("OPPONENT_JOINED", {
+            guestAddr:      myWalletAddr || "anonymous",
+            onChainMatchId: onChainMatchId,
+          });
+
           initPvpListeners();
           updatePvpStatus("OPPONENT FOUND!", "#00ff9d");
           setTimeout(() => {
@@ -1343,25 +1368,29 @@ async function showPvpWaiting() {
 
   if (!joinedExisting) {
     // ── STEP 2: No open lobby found — become the host, post our lobby ──
-    pvpRole    = "host";
-    pvpMatchId = `M${Date.now().toString(36).toUpperCase()}`;
-    document.getElementById("pvpMatchIdDisplay").textContent = pvpMatchId;
+    pvpRole = "host";
+    // pvpMatchId sudah di-set on-chain oleh payEntry() — jangan overwrite dengan string
+    const onChainMatchId = pvpMatchId; // integer dari contract
+    hostOnChainMatchId   = onChainMatchId; // simpan ke module scope untuk cancel & timeout
+    // Firebase key tidak boleh angka murni, pakai prefix "M"
+    const fbLobbyKey = `M${onChainMatchId}`;
+    document.getElementById("pvpMatchIdDisplay").textContent = fbLobbyKey;
 
     try {
-      await FB.set(`lobbies/open/${pvpMatchId}`, {
-        hostAddr: myWalletAddr || "anonymous",
-        ts: Date.now(),
+      await FB.set(`lobbies/open/${fbLobbyKey}`, {
+        hostAddr:      myWalletAddr || "anonymous",
+        onChainMatchId: onChainMatchId,  // ← guest butuh ini untuk joinPvPMatch di contract
+        ts:            Date.now(),
       });
     } catch(e) {
       console.warn("Could not post lobby:", e);
     }
 
+    // Ganti pvpMatchId ke fbLobbyKey agar Firebase path konsisten
+    pvpMatchId = fbLobbyKey;
+
     // Init board listeners so we're ready when guest joins
     initPvpListeners();
-
-    // ── STEP 3: Poll Firebase match events — wait for OPPONENT_JOINED ──
-    // initPvpListeners() already listens on matches/{matchId}/events/guest
-    // handlePvpMessage will call closePvpWaiting + startGame when guest fires
 
     // Countdown ticker
     waitingElapsed = 0;
@@ -1374,7 +1403,6 @@ async function showPvpWaiting() {
       const el = document.getElementById("pvpCountdown");
       if (el) el.textContent = `${mins}:${secs.toString().padStart(2,"0")}`;
 
-      // Pulse status text every 5s for feedback
       if (waitingElapsed % 5000 === 0) {
         const dots = ".".repeat(((waitingElapsed / 5000) % 3) + 1);
         const statusEl = document.getElementById("pvpStatus");
@@ -1385,7 +1413,7 @@ async function showPvpWaiting() {
 
       if (waitingElapsed >= MATCHMAKE_TIMEOUT_MS) {
         clearInterval(waitingTickInterval);
-        onMatchmakeTimeout();
+        onMatchmakeTimeout(hostOnChainMatchId); // kirim onChainMatchId untuk refund
       }
     }, 1000);
   }
@@ -1402,8 +1430,23 @@ async function showPvpWaiting() {
   overlay.querySelector("#pvpCancelBtn").addEventListener("click", async () => {
     clearInterval(waitingTickInterval);
     clearTimeout(matchmakeTimer);
+
     if (pvpRole === "host" && pvpMatchId) {
+      // Hapus lobby dari Firebase
       await FB.remove(`lobbies/open/${pvpMatchId}`).catch(() => {});
+
+      // Refund via contract menggunakan hostOnChainMatchId (module scope)
+      if (hostOnChainMatchId !== null && contract) {
+        try {
+          updatePvpStatus("PROCESSING REFUND…", "#ffcc00");
+          const tx = await contract.cancelPvPMatch(hostOnChainMatchId);
+          await tx.wait();
+          updatePvpStatus("REFUND 0.005 RITUAL BERHASIL ✓", "#00ff9d");
+          await new Promise(r => setTimeout(r, 1500));
+        } catch(e) {
+          console.warn("Refund gagal saat cancel:", e.message);
+        }
+      }
     }
     closePvpWaiting();
   });
@@ -1417,13 +1460,28 @@ function updatePvpStatus(text, color = "#ccff00") {
   el.style.animation = color === "#00ff9d" ? "none" : "";
 }
 
-function onMatchmakeTimeout() {
+async function onMatchmakeTimeout(onChainMatchId) {
   updatePvpStatus("NO OPPONENT FOUND", "#ff3366");
-  // Clean up our lobby listing
+
+  // Bersihkan lobby dari Firebase
   if (pvpRole === "host" && pvpMatchId) {
     FB.remove(`lobbies/open/${pvpMatchId}`).catch(() => {});
   }
-  // Show timeout message inside modal
+
+  // ── REFUND: panggil cancelPvPMatch di contract → kembalikan full 0.005 RITUAL ──
+  if (pvpRole === "host" && onChainMatchId !== undefined && onChainMatchId !== null && contract) {
+    updatePvpStatus("PROCESSING REFUND…", "#ffcc00");
+    try {
+      const tx = await contract.cancelPvPMatch(onChainMatchId);
+      await tx.wait();
+      updatePvpStatus("REFUND 0.005 RITUAL BERHASIL ✓", "#00ff9d");
+    } catch(refundErr) {
+      console.warn("Refund gagal:", refundErr.message);
+      updatePvpStatus("REFUND GAGAL — HUBUNGI ADMIN", "#ff3366");
+    }
+  }
+
+  // Tampilkan pesan timeout di modal
   const infoDiv = document.querySelector(".pvp-wait-info");
   if (infoDiv) {
     const msg = document.createElement("div");
@@ -1595,15 +1653,34 @@ async function payEntry(mode) {
   if (!contract) { alert("Connect wallet dulu!"); return false; }
   const fee = mode === "single" ? "0.001" : "0.005";
   try {
-    let tx;
     if (mode === "single") {
-      tx = await contract.enterSinglePlayer({ value: ethers.parseEther(fee) });
+      const tx = await contract.enterSinglePlayer({ value: ethers.parseEther(fee) });
+      await tx.wait();
     } else {
-      tx = await contract.createPvPMatch({ value: ethers.parseEther(fee) });
-      // In production: capture returned matchId from tx receipt
-      // pvpMatchId = parseInt(receipt.logs[0].data, 16);
+      const tx = await contract.createPvPMatch({ value: ethers.parseEther(fee) });
+      const receipt = await tx.wait();
+
+      // Tangkap matchId on-chain dari event PvPMatchCreated di receipt
+      const iface = new ethers.Interface([
+        "event PvPMatchCreated(uint256 indexed matchId, address indexed player1)"
+      ]);
+      let foundMatchId = null;
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed && parsed.name === "PvPMatchCreated") {
+            foundMatchId = parsed.args.matchId; // BigInt
+            break;
+          }
+        } catch (_) {}
+      }
+      if (foundMatchId === null) {
+        alert("Gagal mendapatkan Match ID dari contract. Coba lagi.");
+        return false;
+      }
+      // Simpan sebagai number — matchId on-chain selalu integer kecil di testnet
+      pvpMatchId = Number(foundMatchId);
     }
-    await tx.wait();
     return true;
   } catch(e) {
     alert("Transaksi gagal: " + e.message);
@@ -1641,9 +1718,10 @@ document.getElementById("singleBtn").addEventListener("click", async () => {
 });
 
 document.getElementById("pvpBtn").addEventListener("click", async () => {
+  // pvpMatchId di-set oleh payEntry() saat tangkap receipt — jangan reset sebelumnya
+  pvpRole = null;
   if (await payEntry("pvp")) {
-    pvpMatchId = null; // reset, will be assigned in showPvpWaiting
-    pvpRole    = null;
+    // pvpMatchId sudah terisi on-chain matchId dari payEntry
     showPvpWaiting();
   }
 });
