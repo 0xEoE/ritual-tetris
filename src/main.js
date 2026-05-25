@@ -1588,8 +1588,22 @@ function injectWaitingStyles() {
 
 // ── SCREEN SWITCHER ───────────────────────────
 function showScreen(id) {
-  document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
-  document.getElementById(id)?.classList.remove("hidden");
+  const preConnect = document.getElementById("preConnectCenter");
+  const footer     = document.getElementById("siteFooter");
+  const gameScreen = document.getElementById("gameScreen");
+
+  if (id === "gameScreen") {
+    if (preConnect) preConnect.style.display = "none";
+    if (footer)     footer.style.display     = "none";
+    gameScreen.classList.remove("hidden");
+    document.body.classList.add("game-active");
+  } else {
+    // kembali ke mode select
+    gameScreen.classList.add("hidden");
+    if (preConnect) preConnect.style.display = "";
+    if (footer)     footer.style.display     = "";
+    document.body.classList.remove("game-active");
+  }
 }
 
 // ── PAUSE ─────────────────────────────────────
