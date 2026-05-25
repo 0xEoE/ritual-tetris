@@ -322,10 +322,16 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  /* ── GAME SCREEN ── */
  #gameScreen {
  display: flex;
+ flex-direction: column;
+ align-items: center;
+ margin-top: 8px;
+ }
+ .game-area {
+ display: flex;
  gap: 40px;
  align-items: flex-start;
  justify-content: center;
- margin-top: 8px;
+ width: 100%;
  }
  /* Saat game aktif, izinkan scroll vertikal */
  body.game-active {
@@ -577,6 +583,7 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
 
  <!-- Game Screen -->
  <div id="gameScreen" class="screen hidden">
+ <div class="game-area">
  <div class="game-wrapper">
  <div class="game-label">// GAME_BOARD</div>
  <canvas id="tetris" width="300" height="600"></canvas>
@@ -586,7 +593,7 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  <div class="panel-block">
  <div class="panel-block-title">// ACTIVE PROTOCOL</div>
  <div class="mode-badge" id="activeModeLabel">SINGLE PLAYER</div>
- <div style="margin-top:12px;font-size:0.65rem;color:rgba(204,255,0,0.35);letterspacing:1px;">
+ <div style="margin-top:12px;font-size:0.65rem;color:rgba(204,255,0,0.35);letter-spacing:1px;">
  ENTRY FEE PAID &nbsp;<span style="color:var(--green)">✓</span>
  </div>
  </div>
@@ -616,6 +623,18 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  <button id="pauseBtn" class="ritual-btn panel-btn">⬡ PAUSE</button>
  <button id="quitBtn" class="ritual-btn panel-btn danger">⬡ QUIT</button>
  </div>
+ </div>
+ <!-- Footer di dalam game screen -->
+ <footer class="site-footer" id="siteFooterGame" style="margin-top:24px;">
+ <div class="footer-links">
+ <a href="https://www.ritualfoundation.org/" target="_blank" rel="noopener">RITUAL FOUNDATION</a>
+ <a href="https://faucet.ritualfoundation.org/" target="_blank" rel="noopener">FAUCET</a>
+ <a href="https://explorer.ritualfoundation.org/" target="_blank" rel="noopener">EXPLORER</a>
+ </div>
+ <div class="footer-credit">
+ MADE BY: <a href="https://x.com/0xEyesofEtresia" target="_blank" rel="noopener">VEYYY (❖,❖)</a>
+ </div>
+ </footer>
  </div>
  </div>
  <script type="module" src="src/main.js"></script>
