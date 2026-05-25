@@ -305,10 +305,27 @@ async function cleanupPvp() {
 // ── TETRIS SETTINGS ───────────────────────────
 const canvas  = document.getElementById("tetris");
 const ctx     = canvas.getContext("2d");
-const BLOCK   = 30;
 const COLS    = 10;
 const ROWS    = 20;
 const TARGET  = 9999;
+
+// BLOCK size dihitung dinamis berdasarkan ruang layar yang tersedia
+let BLOCK = 30;
+
+function resizeCanvas() {
+  // Hitung tinggi yang tersedia: viewport dikurangi header, notif, footer, margin
+  const headerH  = document.querySelector(".terminal-header")?.offsetHeight || 60;
+  const footerH  = document.getElementById("siteFooterGame")?.offsetHeight || 50;
+  const reserved = headerH + footerH + 80; // 80px untuk label, margin, padding
+  const availH   = window.innerHeight - reserved;
+
+  // Hitung BLOCK dari tinggi — minimal 22, maksimal 38 (nyaman di layar besar)
+  const blockFromH = Math.floor(availH / ROWS);
+  BLOCK = Math.min(38, Math.max(22, blockFromH));
+
+  canvas.width  = BLOCK * COLS;
+  canvas.height = BLOCK * ROWS;
+}
 
 let board, score, level, lines, gameRunning, paused;
 let currentPiece, nextPiece, pieceX, pieceY;
@@ -570,6 +587,7 @@ function gameLoop(timestamp) {
 
 // ── START GAME ────────────────────────────────
 function startGame(mode) {
+  resizeCanvas(); // ← sesuaikan ukuran canvas dengan layar saat ini
   currentMode  = mode;
   board        = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   score = 0; level = 1; lines = 0; dropInterval = 800; paused = false;
@@ -592,9 +610,7 @@ function startGame(mode) {
   animFrameId = requestAnimationFrame(gameLoop);
 
   if (mode === "pvp") {
-    // Send initial board state immediately
     syncBoardToPvp();
-    // Periodic sync every 500ms for smooth live updates
     clearInterval(pvpSyncInterval);
     pvpSyncInterval = setInterval(syncBoardToPvp, 500);
   }
@@ -1857,3 +1873,11 @@ document.addEventListener("keydown", e => {
 })();
 
 console.log("%c🎮 Ritual Tetris — PVP Edition Loaded", "color:#00ff9d; font-size:16px");
+
+// ── RESPONSIVE CANVAS RESIZE ──────────────────
+window.addEventListener("resize", () => {
+  if (gameRunning) {
+    resizeCanvas();
+    draw();
+  }
+});
