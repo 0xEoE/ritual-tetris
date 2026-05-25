@@ -1079,7 +1079,7 @@ async function shareToX() {
   // Footer
   sc.fillStyle = "rgba(0,255,157,0.3)";
   sc.font = "9px 'Courier New'";
-  sc.fillText("RITUAL TESTNET  |  0xeoe.github.io/ritual-tetris", 28, 494);
+  sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, 494);
 
   // Convert to blob and download + open Twitter
   shareCanvas.toBlob(async (blob) => {
@@ -1104,7 +1104,7 @@ async function shareToX() {
       `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
       `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
       `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
-      `🕹️ Play here: https://0xEoE.github.io/ritual-tetris/\n\n` +
+      `🕹️ Play here: https://ritual-tetris.vercel.app/\n\n` +
       `@0xEyesofEtresia @Ritualnet\n` +
       `#RitualTestnet`
     );
