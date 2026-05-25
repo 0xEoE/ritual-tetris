@@ -7,11 +7,10 @@
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
 
 // ── CONTRACT ──────────────────────────────────
-const CONTRACT_ADDRESS = "0x56306dc9A61790ca7aaCC97edC50E320DB44fcF5";
+const CONTRACT_ADDRESS = "0x1bDC3F4b7FE16d09ed36BC233087c3b7077D3302";
 const ABI = [
   "function enterSinglePlayer() payable",
-  "function claimSinglePlayerReward(uint256 score, uint256 nonce)",
-  "function claimNonce(address) view returns (uint256)",
+  "function claimSinglePlayerReward(address player, uint256 score)",
   "function createPvPMatch() payable returns (uint256)",
   "function joinPvPMatch(uint256 matchId) payable",
   "function cancelPvPMatch(uint256 matchId)",
@@ -1625,14 +1624,11 @@ async function connectWallet() {
     // ── NETWORK CHECK ──────────────────────────
     const onCorrectNetwork = await isCorrectNetwork();
     if (!onCorrectNetwork) {
-      // Coba switch otomatis dulu
       const switched = await switchToRitualTestnet();
       if (!switched) {
-        // Gagal switch → tampilkan overlay blokir
         showWrongNetworkOverlay();
         return;
       }
-      // Re-init provider setelah switch
       provider = new ethers.BrowserProvider(window.ethereum);
     }
     // ──────────────────────────────────────────
@@ -1641,13 +1637,35 @@ async function connectWallet() {
     contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
     const addr = await signer.getAddress();
     myWalletAddr = addr;
-    const btn  = document.getElementById("connectBtn");
-    const dot  = document.getElementById("statusDot");
-    btn.innerHTML = `✅ ${addr.slice(0,6)}…${addr.slice(-4)}`;
+
+    // Update UI — sembunyikan connectBtn, tampilkan walletInfo
+    const connectBtn  = document.getElementById("connectBtn");
+    const walletInfo  = document.getElementById("walletInfo");
+    const walletAddr  = document.getElementById("walletAddr");
+    const dot         = document.getElementById("statusDot");
+
+    connectBtn.style.display = "none";
+    walletAddr.textContent   = `${addr.slice(0,6)}…${addr.slice(-4)}`;
+    walletInfo.style.display = "flex";
     dot.classList.remove("offline");
   } catch(e) {
     alert("Gagal connect: " + e.message);
   }
+}
+
+function disconnectWallet() {
+  provider     = null;
+  signer       = null;
+  contract     = null;
+  myWalletAddr = null;
+
+  const connectBtn = document.getElementById("connectBtn");
+  const walletInfo = document.getElementById("walletInfo");
+  const dot        = document.getElementById("statusDot");
+
+  connectBtn.style.display = "";
+  walletInfo.style.display = "none";
+  dot.classList.add("offline");
 }
 
 async function payEntry(mode) {
@@ -1692,14 +1710,11 @@ async function payEntry(mode) {
 async function claimSingleReward() {
   try {
     const addr = await signer.getAddress();
-    // Ambil nonce terkini dari contract — mencegah double-claim
-    const nonce = await contract.claimNonce(addr);
-    const tx = await contract.claimSinglePlayerReward(score, nonce);
+    const tx = await contract.claimSinglePlayerReward(addr, score);
     await tx.wait();
-    console.log("✅ Single reward claimed! Nonce:", nonce.toString());
+    console.log("Single reward claimed!");
   } catch(e) {
     console.warn("Claim failed:", e.message);
-    alert("Claim gagal: " + e.message);
   }
 }
 
@@ -1716,6 +1731,7 @@ async function claimPvpReward() {
 
 // ── EVENT LISTENERS ───────────────────────────
 document.getElementById("connectBtn").addEventListener("click", connectWallet);
+document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
 
 document.getElementById("singleBtn").addEventListener("click", async () => {
   if (await payEntry("single")) startGame("single");
