@@ -465,9 +465,8 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  flex-shrink: 0;
  background: linear-gradient(90deg, transparent, rgba(0,255,157,0.2), transparent);
  }
- /* Hide footer while game is active */
- body.game-active #siteFooter,
- body.game-active #siteFooterGame {
+ /* Hide main footer while game is active — footer inside gameScreen is handled separately */
+ body.game-active #siteFooter {
  display: none !important;
  }
  .wallet-addr {
