@@ -315,18 +315,28 @@ const TARGET  = 9999;
 let BLOCK = 30;
 
 function resizeCanvas() {
-  // Hitung tinggi yang tersedia: viewport dikurangi header, notif, footer, margin
-  const headerH  = document.querySelector(".terminal-header")?.offsetHeight || 60;
-  const footerH  = document.getElementById("siteFooterGame")?.offsetHeight || 50;
-  const reserved = headerH + footerH + 80; // 80px untuk label, margin, padding
-  const availH   = window.innerHeight - reserved;
+  // Available height = viewport minus header minus gameScreen top padding minus game-label row
+  const headerH   = document.querySelector(".terminal-header")?.offsetHeight || 64;
+  const labelH    = 20; // .game-label height + margin (~0.6rem + 6px)
+  const paddingH  = 8;  // #gameScreen padding-top
+  const reserved  = headerH + paddingH + labelH + 8; // 8px bottom breathing room
+  const availH    = window.innerHeight - reserved;
 
-  // Hitung BLOCK dari tinggi — minimal 22, maksimal 38 (nyaman di layar besar)
+  // Derive BLOCK size from available height (board is ROWS=20 rows tall)
   const blockFromH = Math.floor(availH / ROWS);
-  BLOCK = Math.min(38, Math.max(22, blockFromH));
+  BLOCK = Math.min(36, Math.max(20, blockFromH));
 
   canvas.width  = BLOCK * COLS;
   canvas.height = BLOCK * ROWS;
+
+  // Sync side-panel max-height to match board height exactly
+  const sidePanel = document.querySelector(".side-panel");
+  if (sidePanel) {
+    sidePanel.style.maxHeight = canvas.height + "px";
+  }
+
+  // Store header height as CSS var for #gameScreen height calc
+  document.documentElement.style.setProperty("--header-h", headerH + "px");
 }
 
 let board, score, level, lines, gameRunning, paused;
@@ -792,11 +802,11 @@ function setupGameScreenForMode(mode) {
     `;
     // Insert at the TOP of side-panel (before all existing children)
     sidePanel.insertBefore(panel, sidePanel.firstChild);
-    // Size the AI canvas proportionally: same aspect ratio as player board (10x20)
+    // Size the AI canvas: fill panel width, height = width * 2 (10col × 20row ratio)
     const aiCanvas = panel.querySelector("#aiCanvas");
-    const panelWidth = sidePanel.offsetWidth || 200;
-    const aiW = panelWidth - 0; // full panel width
-    const aiH = Math.round(aiW * 2); // 10:20 = 1:2 ratio
+    const panelW = Math.min(210, Math.round(window.innerWidth * 0.18));
+    const aiW = Math.max(80, panelW - 24); // subtract padding
+    const aiH = aiW * 2;
     aiCanvas.width  = aiW;
     aiCanvas.height = aiH;
     // Reset game area styles (no extra gap needed)
