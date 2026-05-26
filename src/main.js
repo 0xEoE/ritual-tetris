@@ -2137,15 +2137,27 @@ function showToast(msg, type = "error") {
     const s = document.createElement("style");
     s.textContent = `
       #ritualToast {
-        position: fixed; top: 88px; left: 50%; transform: translateX(-50%) translateY(-12px);
-        z-index: 9999; font-family: 'Share Tech Mono', monospace;
-        font-size: 0.72rem; letter-spacing: 2px; padding: 12px 28px;
-        border: 1px solid; max-width: 480px; width: 90%; text-align: center;
-        opacity: 0; transition: opacity 0.25s, transform 0.25s;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -60px);
+        z-index: 9999;
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        padding: 14px 32px;
+        border: 1px solid;
+        max-width: 500px;
+        width: 90%;
+        text-align: center;
+        opacity: 0;
+        transition: opacity 0.25s, transform 0.25s;
         pointer-events: none;
+        box-shadow: 0 0 40px rgba(0,0,0,0.6);
       }
       #ritualToast.visible {
-        opacity: 1; transform: translateX(-50%) translateY(0);
+        opacity: 1;
+        transform: translate(-50%, -50%);
       }
     `;
     document.head.appendChild(s);
