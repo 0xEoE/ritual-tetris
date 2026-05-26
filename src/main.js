@@ -315,27 +315,34 @@ const TARGET  = 9999;
 let BLOCK = 30;
 
 function resizeCanvas() {
-  // Available height = viewport minus header minus gameScreen top padding minus game-label row
-  const headerH   = document.querySelector(".terminal-header")?.offsetHeight || 64;
-  const labelH    = 20; // .game-label height + margin (~0.6rem + 6px)
-  const paddingH  = 8;  // #gameScreen padding-top
-  const reserved  = headerH + paddingH + labelH + 8; // 8px bottom breathing room
-  const availH    = window.innerHeight - reserved;
+  // Measure the actual available height inside .game-area (flex layout handles the rest)
+  const gameArea = document.querySelector(".game-area");
+  let availH;
+  if (gameArea && gameArea.clientHeight > 0) {
+    availH = gameArea.clientHeight;
+  } else {
+    // Fallback before layout is complete
+    const headerH  = document.querySelector(".terminal-header")?.offsetHeight || 64;
+    const labelH   = 24;
+    const paddingH = 10;
+    availH = window.innerHeight - headerH - labelH - paddingH;
+  }
 
   // Derive BLOCK size from available height (board is ROWS=20 rows tall)
   const blockFromH = Math.floor(availH / ROWS);
-  BLOCK = Math.min(36, Math.max(20, blockFromH));
+  BLOCK = Math.min(40, Math.max(22, blockFromH));
 
   canvas.width  = BLOCK * COLS;
   canvas.height = BLOCK * ROWS;
 
-  // Sync side-panel height to match board height exactly, preventing overflow
+  // Sync side-panel max-height to board height
   const sidePanel = document.querySelector(".side-panel");
   if (sidePanel) {
     sidePanel.style.maxHeight = canvas.height + "px";
   }
 
-  // Store header height as CSS var for #gameScreen height calc
+  // Keep CSS var in sync (used by nothing critical now, but kept for safety)
+  const headerH = document.querySelector(".terminal-header")?.offsetHeight || 64;
   document.documentElement.style.setProperty("--header-h", headerH + "px");
 }
 
@@ -624,7 +631,12 @@ function startGame(mode) {
   updateUI();
   lastDrop = performance.now();
   cancelAnimationFrame(animFrameId);
-  animFrameId = requestAnimationFrame(gameLoop);
+  // Re-measure after layout settles (showScreen already schedules one via rAF,
+  // but we need BLOCK set before the first gameLoop draw)
+  requestAnimationFrame(() => {
+    resizeCanvas();
+    animFrameId = requestAnimationFrame(gameLoop);
+  });
 
   if (mode === "pvp") {
     syncBoardToPvp();
@@ -803,12 +815,12 @@ function setupGameScreenForMode(mode) {
     // Insert at the TOP of side-panel (before all existing children)
     sidePanel.insertBefore(panel, sidePanel.firstChild);
     // Size the AI canvas: fill panel width, height = width * 2 (10col × 20row ratio)
-    // But cap at 45% of board height so info blocks below always fit
+    // Cap at 38% of board height so the stats below (score/level/lines/buttons) always fit
     const aiCanvas = panel.querySelector("#aiCanvas");
     const panelW = Math.min(210, Math.round(window.innerWidth * 0.18));
-    const aiW = Math.max(80, panelW - 24);
-    // Cap height: at most 45% of the player board height to leave room for stats
-    const maxAiH = Math.floor(canvas.height * 0.45);
+    const aiW = Math.max(90, panelW - 20);
+    // Cap height: at most 38% of the player board height — tighter cap for breathing room
+    const maxAiH = Math.floor(canvas.height * 0.38);
     const aiH = Math.min(aiW * 2, maxAiH);
     aiCanvas.width  = aiW;
     aiCanvas.height = aiH;
@@ -1348,7 +1360,10 @@ function showResult(mode) {
 
   // Claim reward if applicable
   if (!isPvp && !isVsAi && score >= TARGET && contract) claimSingleReward();
-  if (isVsAi && myWon && !isDraw && contract) claimSingleReward(); // menang vs AI = claim solo reward
+  if (isVsAi && myWon && !isDraw && contract) {
+    // menang vs AI = claim solo reward, trigger asynchronously but with user feedback
+    setTimeout(() => claimSingleReward(), 800);
+  }
   if (isPvp && myWon && !isDraw && contract && pvpMatchId !== null) claimPvpReward();
 }
 
@@ -1423,7 +1438,37 @@ async function shareToX() {
   const snapCanvas = document.getElementById("resultBoardCanvas");
   if (!snapCanvas) return;
 
-  // Build a composite share image
+  // Build tweet text FIRST (sync) so we can open Twitter immediately
+  const isPvp  = currentMode === "pvp";
+  const isVsAi = currentMode === "vs-ai";
+  const won    = isPvp ? score >= opponentScore : isVsAi ? score > opponentScore : score >= TARGET;
+  const modeStr  = currentMode === "pvp" ? "PVP Arena" : currentMode === "vs-ai" ? "vs AI" : "Solo Mode";
+  const resultStr = isVsAi
+    ? (score > opponentScore ? "🤖 Beat the AI!" : score === opponentScore ? "🤝 Draw vs AI" : "🤖 AI Wins")
+    : (isPvp ? score >= opponentScore : score >= TARGET)
+      ? "🏆 VICTORY"
+      : "💀 Game Over";
+  const tweet = encodeURIComponent(
+    `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
+    `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
+    `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
+    `🕹️ Play here: https://ritual-tetris.vercel.app/\n\n` +
+    `@0xEyesofEtresia @Ritualnet\n` +
+    `#RitualTestnet`
+  );
+  const tweetUrl = `https://x.com/intent/tweet?text=${tweet}`;
+
+  // Update button to show a direct link (always works, avoids popup blocker)
+  const shareBtn = document.getElementById("shareXBtn");
+  if (shareBtn) {
+    shareBtn.innerHTML = `<a href="${tweetUrl}" target="_blank" rel="noopener"
+      style="color:inherit;text-decoration:none;">𝕏 OPEN X (NEW TAB)</a>`;
+  }
+
+  // Also attempt window.open (may be blocked by browser)
+  window.open(tweetUrl, "_blank", "noopener,noreferrer");
+
+  // Build composite share image and trigger download
   const shareCanvas  = document.createElement("canvas");
   shareCanvas.width  = 600;
   shareCanvas.height = 520;
@@ -1450,7 +1495,6 @@ async function shareToX() {
   // Header text
   sc.fillStyle = "#ccff00";
   sc.font = "bold 11px 'Courier New', monospace";
-  sc.letterSpacing = "3px";
   sc.fillText("// ON-CHAIN GAMING", 28, 38);
 
   sc.fillStyle = "#ccff00";
@@ -1515,8 +1559,6 @@ async function shareToX() {
   sc.fillText(String(lines).padStart(3,"0"), sx + 12, sy + 166);
 
   // Result badge
-  const isPvp = currentMode === "pvp";
-  const won   = isPvp ? score >= opponentScore : score >= TARGET;
   sc.fillStyle = won ? "rgba(0,255,157,0.1)" : "rgba(255,51,102,0.1)";
   sc.strokeStyle = won ? "#00ff9d" : "#ff3366";
   sc.lineWidth = 1;
@@ -1545,42 +1587,20 @@ async function shareToX() {
   sc.font = "9px 'Courier New'";
   sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, 494);
 
-  // Build tweet text
-  const modeStr  = currentMode === "pvp" ? "PVP Arena" : currentMode === "vs-ai" ? "vs AI" : "Solo Mode";
-  const resultStr = currentMode === "vs-ai"
-    ? (score > opponentScore ? "🤖 Beat the AI!" : score === opponentScore ? "🤝 Draw vs AI" : "🤖 AI Wins")
-    : (currentMode === "pvp" ? score >= opponentScore : score >= TARGET)
-      ? "🏆 VICTORY"
-      : "💀 Game Over";
-  const tweet = encodeURIComponent(
-    `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
-    `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
-    `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
-    `🕹️ Play here: https://ritual-tetris.vercel.app/\n\n` +
-    `@0xEyesofEtresia @Ritualnet\n` +
-    `#RitualTestnet`
-  );
-
-  // Open Twitter IMMEDIATELY (synchronous, before any async) to avoid popup blocker
-  const twitterWindow = window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
-  if (!twitterWindow) {
-    // If popup was blocked, show a fallback link in the modal
-    const shareBtn = document.getElementById("shareXBtn");
-    if (shareBtn) {
-      shareBtn.innerHTML = `<a href="https://x.com/intent/tweet?text=${tweet}" target="_blank" style="color:inherit;text-decoration:none;">𝕏 OPEN TWITTER (click here)</a>`;
-    }
+  // Download the share image
+  try {
+    shareCanvas.toBlob((blob) => {
+      if (!blob) return;
+      const url  = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = `ritual-tetris-${Date.now()}.png`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  } catch(e) {
+    console.warn("Could not generate share image:", e);
   }
-
-  // Download the share image (async is fine for download)
-  shareCanvas.toBlob((blob) => {
-    if (!blob) return;
-    const url  = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.download = `ritual-tetris-${Date.now()}.png`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, "image/png");
 }
 
 // ── INJECT RESULT MODAL STYLES ────────────────
@@ -2092,6 +2112,8 @@ function showScreen(id) {
     if (footer)     footer.style.display     = "none";
     gameScreen.classList.remove("hidden");
     document.body.classList.add("game-active");
+    // Re-measure canvas after layout settles
+    requestAnimationFrame(() => { resizeCanvas(); draw(); });
   } else {
     // kembali ke mode select
     gameScreen.classList.add("hidden");
@@ -2233,8 +2255,54 @@ function disconnectWallet() {
   dot.classList.add("offline");
 }
 
+// ── WALLET REQUIRED NOTICE (shown in notif-bar area) ─────────
+function showWalletRequiredNotice() {
+  // Remove any existing notice
+  const existing = document.getElementById("walletRequiredNotice");
+  if (existing) { existing.remove(); }
+
+  const notifBar = document.querySelector(".notif-bar");
+  if (!notifBar) { showToast("Please connect your wallet first."); return; }
+
+  const notice = document.createElement("div");
+  notice.id = "walletRequiredNotice";
+  notice.style.cssText = `
+    width: 100%;
+    max-width: 820px;
+    margin: 10px auto 0;
+    padding: 12px 20px;
+    border: 1px solid rgba(255, 51, 102, 0.6);
+    background: rgba(255, 51, 102, 0.08);
+    color: #ff3366;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-align: center;
+    animation: walletNoticeIn 0.3s ease;
+    position: relative;
+  `;
+  notice.textContent = "⚠  PLEASE CONNECT YOUR WALLET FIRST";
+
+  if (!document.getElementById("walletNoticeStyle")) {
+    const s = document.createElement("style");
+    s.id = "walletNoticeStyle";
+    s.textContent = `
+      @keyframes walletNoticeIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  // Insert after notif-bar
+  notifBar.insertAdjacentElement("afterend", notice);
+  // Auto-remove after 3.5s
+  setTimeout(() => { if (notice.parentNode) notice.remove(); }, 3500);
+}
+
 async function payEntry(mode) {
-  if (!contract) { showToast("Please connect your wallet first."); return false; }
+  if (!contract) { showWalletRequiredNotice(); return false; }
   const fee = mode === "single" ? "0.001" : "0.005";
   try {
     if (mode === "single") {
@@ -2282,11 +2350,23 @@ async function claimSingleReward() {
     const addr = await signer.getAddress();
     // Ambil nonce terkini dari contract — mencegah double-claim
     const nonce = await contract.claimNonce(addr);
+    showToast("🏆 Claiming reward... Please confirm in MetaMask.", "success");
     const tx = await contract.claimSinglePlayerReward(score, nonce);
+    showToast("⏳ Transaction sent, waiting for confirmation...", "warn");
     await tx.wait();
+    showToast("✅ Reward claimed successfully!", "success");
     console.log("✅ Single reward claimed! Nonce:", nonce.toString());
   } catch(e) {
-    console.warn("Claim failed:", e.message);
+    const isRejected = e.code === 4001
+      || e.code === "ACTION_REJECTED"
+      || (e.message && e.message.toLowerCase().includes("user denied"))
+      || (e.message && e.message.toLowerCase().includes("user rejected"));
+    if (isRejected) {
+      showToast("Reward claim cancelled by user.", "warn");
+    } else {
+      showToast("Claim failed: " + (e.reason || e.message || "Unknown error"), "error");
+      console.warn("Claim failed:", e.message);
+    }
   }
 }
 
