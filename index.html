@@ -319,95 +319,103 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  color: var(--green);
  transform: translate(3px, -3px);
  }
- /* ── GAME SCREEN ── */
+ /* ── GAME SCREEN — viewport-fit, no scroll needed ── */
+ body.game-active {
+ overflow: hidden !important;
+ height: 100vh !important;
+ }
  #gameScreen {
  display: flex;
  flex-direction: column;
  align-items: center;
  padding-top: 4px;
+ /* fill remaining height after header */
+ height: calc(100vh - var(--header-h, 68px) - 8px);
+ overflow: hidden;
  }
  .game-area {
  display: flex;
- gap: clamp(16px, 3vw, 48px);
- align-items: stretch; /* ← kunci: panel kanan ikut tinggi canvas */
+ gap: clamp(10px, 2vw, 32px);
+ align-items: flex-start;
  justify-content: center;
  width: 100%;
- }
- /* Saat game aktif, izinkan scroll vertikal */
- body.game-active {
- overflow-y: auto;
- height: auto;
+ /* fill all vertical space so side-panel can stretch */
+ flex: 1;
+ min-height: 0;
+ overflow: hidden;
  }
  .game-wrapper {
  position: relative;
  display: flex;
  flex-direction: column;
+ flex-shrink: 0;
  }
  .game-label {
- font-size: 0.65rem;
+ font-size: 0.6rem;
  letter-spacing: 3px;
  color: rgba(0,255,157,0.4);
- margin-bottom: 8px;
+ margin-bottom: 6px;
  }
- /* Canvas responsif — mengisi ruang yang tersedia */
+ /* Canvas: height driven by JS resizeCanvas(), width follows */
  #tetris {
  display: block;
  border: 1px solid var(--green);
  background: #000;
  box-shadow: 0 0 0 1px rgba(0,255,157,0.08), 0 0 40px rgba(0,255,157,0.15);
  image-rendering: pixelated;
- /* ukuran via JS, tapi beri max agar tidak overflow di layar kecil */
- max-width: min(340px, 42vw);
- width: auto;
- height: auto;
  }
- /* ── SIDE PANEL ── */
+ /* ── SIDE PANEL — compact, same height as player board ── */
  .side-panel {
- width: clamp(180px, 22vw, 240px);
+ width: clamp(160px, 18vw, 210px);
  display: flex;
  flex-direction: column;
- gap: 8px;
- /* atas rata dengan game-label agar sejajar sempurna */
- padding-top: calc(0.65rem + 8px + 1em); /* tinggi game-label + margin-bottom */
+ gap: 5px;
+ /* align top with game-label row */
+ padding-top: calc(0.6rem + 6px + 1em);
+ /* match board height: JS sets --board-h on .game-area */
+ max-height: var(--board-h, 600px);
+ overflow: hidden;
+ flex-shrink: 0;
  }
  .panel-block {
  border: 1px solid rgba(0,255,157,0.2);
  background: var(--bg2);
- padding: clamp(10px, 1.2vw, 16px) clamp(12px, 1.5vw, 20px);
+ padding: 7px 12px;
  position: relative;
  flex-shrink: 0;
  }
  .panel-block-title {
- font-size: 0.6rem;
+ font-size: 0.54rem;
  letter-spacing: 3px;
  color: rgba(0,255,157,0.35);
- margin-bottom: 8px;
+ margin-bottom: 4px;
  }
  .stat-value {
  font-family: 'Orbitron', monospace;
- font-size: clamp(1.2rem, 2vw, 1.8rem);
+ font-size: clamp(1rem, 1.6vw, 1.4rem);
  font-weight: 700;
  color: var(--lime);
  letter-spacing: 2px;
  }
  .stat-label {
- font-size: 0.62rem;
+ font-size: 0.54rem;
  letter-spacing: 2px;
  color: rgba(204,255,0,0.3);
- margin-top: 4px;
+ margin-top: 2px;
  }
  .next-block-canvas {
- width: 80px; height: 80px;
+ width: 64px; height: 64px;
  border: 1px solid rgba(0,255,157,0.15);
  background: #000;
  display: block;
  }
  .panel-btn {
  width: 100%;
- padding: clamp(8px, 1vw, 12px);
- font-size: 0.72rem;
- letter-spacing: 3px;
+ padding: 7px 8px;
+ font-size: 0.65rem;
+ letter-spacing: 2px;
  text-align: center;
+ flex-shrink: 0;
  }
  .panel-btn.danger {
  border-color: rgba(255,0,100,0.4);
@@ -422,9 +430,9 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  /* Mode badge */
  .mode-badge {
  display: inline-block;
- font-size: 0.6rem;
+ font-size: 0.54rem;
  letter-spacing: 2px;
- padding: 4px 10px;
+ padding: 3px 8px;
  border: 1px solid rgba(255,204,0,0.3);
  color: var(--gold);
  background: rgba(255,204,0,0.06);
@@ -432,8 +440,8 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  /* Progress bar */
  .progress-bar-wrap {
  background: rgba(0,255,157,0.06);
- height: 3px;
- margin-top: 10px;
+ height: 2px;
+ margin-top: 6px;
  position: relative;
  }
  .progress-bar-fill {
@@ -444,15 +452,21 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  box-shadow: 0 0 8px var(--green);
  }
  .progress-label {
- font-size: 0.58rem;
+ font-size: 0.52rem;
  color: rgba(0,255,157,0.35);
  letter-spacing: 1px;
- margin-top: 5px;
+ margin-top: 3px;
  }
  /* Divider */
  .divider {
  height: 1px;
+ flex-shrink: 0;
  background: linear-gradient(90deg, transparent, rgba(0,255,157,0.2), transparent);
+ }
+ /* Hide footer while game is active */
+ body.game-active #siteFooter,
+ body.game-active #siteFooterGame {
+ display: none !important;
  }
  .wallet-addr {
  font-size: 0.72rem;
