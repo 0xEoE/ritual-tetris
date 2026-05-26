@@ -315,35 +315,29 @@ const TARGET  = 9999;
 let BLOCK = 30;
 
 function resizeCanvas() {
-  // Measure the actual available height inside .game-area (flex layout handles the rest)
-  const gameArea = document.querySelector(".game-area");
-  let availH;
-  if (gameArea && gameArea.clientHeight > 0) {
-    availH = gameArea.clientHeight;
-  } else {
-    // Fallback before layout is complete
-    const headerH  = document.querySelector(".terminal-header")?.offsetHeight || 64;
-    const labelH   = 24;
-    const paddingH = 10;
-    availH = window.innerHeight - headerH - labelH - paddingH;
-  }
+  // Measure real rendered header height (compact mode already applied by CSS)
+  const header  = document.querySelector(".terminal-header");
+  const headerH = header ? header.getBoundingClientRect().height : 56;
 
-  // Derive BLOCK size from available height (board is ROWS=20 rows tall)
+  // 4px game-area padding-top + 4px padding-bottom + game-label row
+  const labelH  = 18;  // ~0.6rem line + 4px margin-bottom
+  const gapH    = 12;  // game-area top + bottom padding
+  const extraH  = 8;   // small breathing room
+
+  const availH  = window.innerHeight - headerH - labelH - gapH - extraH;
+
+  // Derive block size from available height
   const blockFromH = Math.floor(availH / ROWS);
-  BLOCK = Math.min(40, Math.max(22, blockFromH));
+  BLOCK = Math.min(38, Math.max(20, blockFromH));
 
   canvas.width  = BLOCK * COLS;
   canvas.height = BLOCK * ROWS;
 
-  // Sync side-panel max-height to board height
+  // Cap side-panel to canvas height so it never overflows
   const sidePanel = document.querySelector(".side-panel");
   if (sidePanel) {
     sidePanel.style.maxHeight = canvas.height + "px";
   }
-
-  // Keep CSS var in sync (used by nothing critical now, but kept for safety)
-  const headerH = document.querySelector(".terminal-header")?.offsetHeight || 64;
-  document.documentElement.style.setProperty("--header-h", headerH + "px");
 }
 
 let board, score, level, lines, gameRunning, paused;
@@ -631,12 +625,9 @@ function startGame(mode) {
   updateUI();
   lastDrop = performance.now();
   cancelAnimationFrame(animFrameId);
-  // Re-measure after layout settles (showScreen already schedules one via rAF,
-  // but we need BLOCK set before the first gameLoop draw)
-  requestAnimationFrame(() => {
-    resizeCanvas();
-    animFrameId = requestAnimationFrame(gameLoop);
-  });
+  // Resize after showScreen so game-active CSS is in effect, then start loop
+  resizeCanvas();
+  animFrameId = requestAnimationFrame(gameLoop);
 
   if (mode === "pvp") {
     syncBoardToPvp();
@@ -814,14 +805,13 @@ function setupGameScreenForMode(mode) {
     `;
     // Insert at the TOP of side-panel (before all existing children)
     sidePanel.insertBefore(panel, sidePanel.firstChild);
-    // Size the AI canvas: fill panel width, height = width * 2 (10col × 20row ratio)
-    // Cap at 38% of board height so the stats below (score/level/lines/buttons) always fit
+    // Size the AI canvas to fill the side-panel width, with correct 10:20 ratio
+    // Cap height to 40% of player board so stats below always fit
     const aiCanvas = panel.querySelector("#aiCanvas");
-    const panelW = Math.min(210, Math.round(window.innerWidth * 0.18));
-    const aiW = Math.max(90, panelW - 20);
-    // Cap height: at most 38% of the player board height — tighter cap for breathing room
-    const maxAiH = Math.floor(canvas.height * 0.38);
-    const aiH = Math.min(aiW * 2, maxAiH);
+    const aiW = 180; // matches .side-panel width: 200px minus 20px padding
+    const maxAiH = Math.floor(canvas.height * 0.40);
+    const naturalH = Math.round(aiW * (ROWS / COLS)); // = aiW * 2
+    const aiH = Math.min(naturalH, maxAiH);
     aiCanvas.width  = aiW;
     aiCanvas.height = aiH;
     // Reset game area styles (no extra gap needed)
@@ -2112,10 +2102,7 @@ function showScreen(id) {
     if (footer)     footer.style.display     = "none";
     gameScreen.classList.remove("hidden");
     document.body.classList.add("game-active");
-    // Re-measure canvas after layout settles
-    requestAnimationFrame(() => { resizeCanvas(); draw(); });
   } else {
-    // kembali ke mode select
     gameScreen.classList.add("hidden");
     if (preConnect) preConnect.style.display = "";
     if (footer)     footer.style.display     = "";
