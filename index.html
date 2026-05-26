@@ -34,17 +34,16 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  background: var(--bg);
  color: var(--lime);
  font-family: 'Share Tech Mono', monospace;
- min-height: 100vh;
- height: 100vh;
+ height: 100dvh;
  overflow: hidden;
  position: relative;
  display: flex;
  flex-direction: column;
  }
+ /* Game-active: lock everything, no scroll ever */
  body.game-active {
- overflow-y: auto;
- height: auto;
- display: block;
+ overflow: hidden !important;
+ height: 100dvh !important;
  }
  /* Scanline overlay */
  body::before {
@@ -72,15 +71,15 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  z-index: 0;
  }
  .ritual-container {
- max-width: 1160px;
  width: 100%;
  margin: 0 auto;
- padding: 18px 32px;
+ padding: 12px 24px;
  position: relative;
  z-index: 1;
  display: flex;
  flex-direction: column;
  flex: 1;
+ min-height: 0;
  }
  /* Pre-connect: semua konten di tengah layar */
  .pre-connect-center {
@@ -319,84 +318,70 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  color: var(--green);
  transform: translate(3px, -3px);
  }
- /* ── GAME SCREEN — viewport-fit, no scroll needed ── */
- body.game-active {
- overflow: hidden !important;
- height: 100vh !important;
- display: flex !important;
- flex-direction: column !important;
- }
- /* Collapse container padding when game is active so nothing overflows */
+ /* ── GAME SCREEN — fixed 1-page, no scroll ever ── */
  body.game-active .ritual-container {
- padding-top: 0;
- padding-bottom: 0;
- flex: 1;
- min-height: 0;
- display: flex;
- flex-direction: column;
+ padding: 0 16px 0;
  max-width: 100%;
  }
- /* Header stays compact */
  body.game-active .terminal-header {
- margin-bottom: 6px;
+ margin-bottom: 4px;
  flex-shrink: 0;
+ padding: 8px 20px;
  }
  #gameScreen {
  display: flex;
  flex-direction: column;
- align-items: center;
- padding-top: 4px;
- /* fill remaining height after header */
  flex: 1;
  min-height: 0;
  overflow: hidden;
+ width: 100%;
  }
  .game-area {
  display: flex;
- gap: clamp(10px, 2vw, 32px);
+ flex-direction: row;
+ gap: 16px;
  align-items: center;
  justify-content: center;
- width: 100%;
- /* fill all vertical space so canvas can be measured */
  flex: 1;
  min-height: 0;
  overflow: hidden;
- padding: 0 16px;
+ padding: 4px 0 4px;
+ width: 100%;
  }
  .game-wrapper {
- position: relative;
  display: flex;
  flex-direction: column;
+ align-items: flex-start;
  flex-shrink: 0;
  }
  .game-label {
  font-size: 0.6rem;
  letter-spacing: 3px;
  color: rgba(0,255,157,0.4);
- margin-bottom: 6px;
+ margin-bottom: 4px;
  }
- /* Canvas: height driven by JS resizeCanvas(), width follows */
+ /* Canvas sized by JS resizeCanvas() */
  #tetris {
  display: block;
  border: 1px solid var(--green);
  background: #000;
  box-shadow: 0 0 0 1px rgba(0,255,157,0.08), 0 0 40px rgba(0,255,157,0.15);
  image-rendering: pixelated;
+ flex-shrink: 0;
  }
- /* ── SIDE PANEL — compact, same height as player board ── */
+ /* ── SIDE PANEL ── */
  .side-panel {
- width: clamp(180px, 20vw, 230px);
+ width: 200px;
+ flex-shrink: 0;
  display: flex;
  flex-direction: column;
  gap: 4px;
- /* align top with game-label row */
- padding-top: calc(0.6rem + 6px + 1em);
- /* match board height set by JS */
  overflow-y: auto;
  overflow-x: hidden;
- flex-shrink: 0;
- scrollbar-width: thin;
- scrollbar-color: rgba(0,255,157,0.15) transparent;
+ scrollbar-width: none;
+ align-self: flex-start;
+ /* top-align with game-label + canvas */
+ margin-top: calc(0.6rem + 4px + 1em);
  }
  .side-panel::-webkit-scrollbar { display: none; }
  .panel-block {
