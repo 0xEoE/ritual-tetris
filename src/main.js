@@ -329,7 +329,7 @@ function resizeCanvas() {
   canvas.width  = BLOCK * COLS;
   canvas.height = BLOCK * ROWS;
 
-  // Sync side-panel max-height to match board height exactly
+  // Sync side-panel height to match board height exactly, preventing overflow
   const sidePanel = document.querySelector(".side-panel");
   if (sidePanel) {
     sidePanel.style.maxHeight = canvas.height + "px";
@@ -762,7 +762,7 @@ function setupGameScreenForMode(mode) {
     const sidePanel = document.querySelector(".side-panel");
     const panel = document.createElement("div");
     panel.id = "opponentPanel";
-    panel.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:10px;";
+    panel.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:8px; flex-shrink:1; min-height:0;";
     panel.innerHTML = `
       <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); align-self:flex-start;">
         // RITUAL_AI
@@ -771,9 +771,9 @@ function setupGameScreenForMode(mode) {
         font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
         text-align:center; line-height:1.6; align-self:flex-start;
       ">PIERRE DELLACHERIE ALGORITHM</div>
-      <div style="position:relative; width:100%;">
+      <div style="position:relative; width:100%; flex-shrink:1; min-height:0;">
         <canvas id="aiCanvas"
-          style="display:block; width:100%; border:1px solid rgba(0,200,255,0.4);
+          style="display:block; width:100%; max-width:100%; border:1px solid rgba(0,200,255,0.4);
                  background:#000; box-shadow:0 0 20px rgba(0,200,255,0.15);
                  image-rendering:pixelated;">
         </canvas>
@@ -803,10 +803,13 @@ function setupGameScreenForMode(mode) {
     // Insert at the TOP of side-panel (before all existing children)
     sidePanel.insertBefore(panel, sidePanel.firstChild);
     // Size the AI canvas: fill panel width, height = width * 2 (10col × 20row ratio)
+    // But cap at 45% of board height so info blocks below always fit
     const aiCanvas = panel.querySelector("#aiCanvas");
     const panelW = Math.min(210, Math.round(window.innerWidth * 0.18));
-    const aiW = Math.max(80, panelW - 24); // subtract padding
-    const aiH = aiW * 2;
+    const aiW = Math.max(80, panelW - 24);
+    // Cap height: at most 45% of the player board height to leave room for stats
+    const maxAiH = Math.floor(canvas.height * 0.45);
+    const aiH = Math.min(aiW * 2, maxAiH);
     aiCanvas.width  = aiW;
     aiCanvas.height = aiH;
     // Reset game area styles (no extra gap needed)
@@ -1826,7 +1829,7 @@ async function showPvpWaiting() {
             });
             await tx.wait();
           } catch(contractErr) {
-            alert("Gagal join match on-chain: " + contractErr.message);
+            showToast("Failed to join match on-chain: " + contractErr.message);
             joinedExisting = false;
             break;
           }
@@ -2120,9 +2123,53 @@ function togglePause() {
   }
 }
 
+// ── TOAST NOTIFICATION (replaces browser alert) ───────────────
+function showToast(msg, type = "error") {
+  let el = document.getElementById("ritualToast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "ritualToast";
+    const colors = {
+      error:   { border: "rgba(255,51,102,0.6)",  bg: "rgba(255,51,102,0.08)",  text: "#ff3366" },
+      success: { border: "rgba(0,255,157,0.6)",   bg: "rgba(0,255,157,0.08)",   text: "#00ff9d" },
+      warn:    { border: "rgba(255,204,0,0.6)",   bg: "rgba(255,204,0,0.08)",   text: "#ffcc00" },
+    };
+    const s = document.createElement("style");
+    s.textContent = `
+      #ritualToast {
+        position: fixed; top: 88px; left: 50%; transform: translateX(-50%) translateY(-12px);
+        z-index: 9999; font-family: 'Share Tech Mono', monospace;
+        font-size: 0.72rem; letter-spacing: 2px; padding: 12px 28px;
+        border: 1px solid; max-width: 480px; width: 90%; text-align: center;
+        opacity: 0; transition: opacity 0.25s, transform 0.25s;
+        pointer-events: none;
+      }
+      #ritualToast.visible {
+        opacity: 1; transform: translateX(-50%) translateY(0);
+      }
+    `;
+    document.head.appendChild(s);
+    document.body.appendChild(el);
+  }
+  const palette = {
+    error:   { border: "rgba(255,51,102,0.6)",  bg: "rgba(255,51,102,0.08)",  text: "#ff3366" },
+    success: { border: "rgba(0,255,157,0.6)",   bg: "rgba(0,255,157,0.08)",   text: "#00ff9d" },
+    warn:    { border: "rgba(255,204,0,0.6)",   bg: "rgba(255,204,0,0.08)",   text: "#ffcc00" },
+  }[type] || { border: "rgba(255,51,102,0.6)", bg: "rgba(255,51,102,0.08)", text: "#ff3366" };
+
+  el.style.borderColor = palette.border;
+  el.style.background  = palette.bg;
+  el.style.color       = palette.text;
+  el.textContent = msg;
+  el.classList.add("visible");
+
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove("visible"), 3500);
+}
+
 // ── WALLET ────────────────────────────────────
 async function connectWallet() {
-  if (!window.ethereum) return alert("MetaMask tidak ditemukan!");
+  if (!window.ethereum) return showToast("MetaMask not found. Please install it to continue.");
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
     await provider.send("eth_requestAccounts", []);
@@ -2155,7 +2202,7 @@ async function connectWallet() {
     walletInfo.style.display = "flex";
     dot.classList.remove("offline");
   } catch(e) {
-    alert("Gagal connect: " + e.message);
+    showToast("Connection failed: " + e.message);
   }
 }
 
@@ -2175,7 +2222,7 @@ function disconnectWallet() {
 }
 
 async function payEntry(mode) {
-  if (!contract) { alert("Connect wallet dulu!"); return false; }
+  if (!contract) { showToast("Please connect your wallet first."); return false; }
   const fee = mode === "single" ? "0.001" : "0.005";
   try {
     if (mode === "single") {
