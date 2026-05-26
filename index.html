@@ -372,11 +372,13 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  gap: 5px;
  /* align top with game-label row */
  padding-top: calc(0.6rem + 6px + 1em);
- /* match board height: JS sets --board-h on .game-area */
- max-height: var(--board-h, 600px);
- overflow: hidden;
+ /* match board height set by JS */
+ overflow-y: auto;
+ overflow-x: hidden;
  flex-shrink: 0;
+ scrollbar-width: none; /* hide scrollbar — content just fits */
  }
+ .side-panel::-webkit-scrollbar { display: none; }
  .panel-block {
  border: 1px solid rgba(0,255,157,0.2);
  background: var(--bg2);
