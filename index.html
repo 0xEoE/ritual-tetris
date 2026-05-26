@@ -323,6 +323,23 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  body.game-active {
  overflow: hidden !important;
  height: 100vh !important;
+ display: flex !important;
+ flex-direction: column !important;
+ }
+ /* Collapse container padding when game is active so nothing overflows */
+ body.game-active .ritual-container {
+ padding-top: 0;
+ padding-bottom: 0;
+ flex: 1;
+ min-height: 0;
+ display: flex;
+ flex-direction: column;
+ max-width: 100%;
+ }
+ /* Header stays compact */
+ body.game-active .terminal-header {
+ margin-bottom: 6px;
+ flex-shrink: 0;
  }
  #gameScreen {
  display: flex;
@@ -330,19 +347,21 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  align-items: center;
  padding-top: 4px;
  /* fill remaining height after header */
- height: calc(100vh - var(--header-h, 68px) - 8px);
+ flex: 1;
+ min-height: 0;
  overflow: hidden;
  }
  .game-area {
  display: flex;
  gap: clamp(10px, 2vw, 32px);
- align-items: flex-start;
+ align-items: center;
  justify-content: center;
  width: 100%;
- /* fill all vertical space so side-panel can stretch */
+ /* fill all vertical space so canvas can be measured */
  flex: 1;
  min-height: 0;
  overflow: hidden;
+ padding: 0 16px;
  }
  .game-wrapper {
  position: relative;
@@ -366,17 +385,18 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  }
  /* ── SIDE PANEL — compact, same height as player board ── */
  .side-panel {
- width: clamp(160px, 18vw, 210px);
+ width: clamp(180px, 20vw, 230px);
  display: flex;
  flex-direction: column;
- gap: 5px;
+ gap: 4px;
  /* align top with game-label row */
  padding-top: calc(0.6rem + 6px + 1em);
  /* match board height set by JS */
  overflow-y: auto;
  overflow-x: hidden;
  flex-shrink: 0;
- scrollbar-width: none; /* hide scrollbar — content just fits */
+ scrollbar-width: thin;
+ scrollbar-color: rgba(0,255,157,0.15) transparent;
  }
  .side-panel::-webkit-scrollbar { display: none; }
  .panel-block {
@@ -465,9 +485,8 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  flex-shrink: 0;
  background: linear-gradient(90deg, transparent, rgba(0,255,157,0.2), transparent);
  }
- /* Hide footer while game is active */
- body.game-active #siteFooter,
- body.game-active #siteFooterGame {
+ /* Hide main footer while game is active, game footer managed by JS */
+ body.game-active #siteFooter {
  display: none !important;
  }
  .wallet-addr {
@@ -663,18 +682,6 @@ href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:w
  <button id="pauseBtn" class="ritual-btn panel-btn">⬡ PAUSE</button>
  <button id="quitBtn" class="ritual-btn panel-btn danger">⬡ QUIT</button>
  </div>
- </div>
- <!-- Footer di dalam game screen -->
- <footer class="site-footer" id="siteFooterGame" style="margin-top:24px;">
- <div class="footer-links">
- <a href="https://www.ritualfoundation.org/" target="_blank" rel="noopener">RITUAL FOUNDATION</a>
- <a href="https://faucet.ritualfoundation.org/" target="_blank" rel="noopener">FAUCET</a>
- <a href="https://explorer.ritualfoundation.org/" target="_blank" rel="noopener">EXPLORER</a>
- </div>
- <div class="footer-credit">
- MADE BY: <a href="https://x.com/0xEyesofEtresia" target="_blank" rel="noopener">VEYYY (❖,❖)</a>
- </div>
- </footer>
  </div>
  </div>
  <script type="module" src="src/main.js"></script>
