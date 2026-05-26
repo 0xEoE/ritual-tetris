@@ -748,66 +748,60 @@ function setupGameScreenForMode(mode) {
     modeLabel.style.color  = "#00ccff";
     modeLabel.style.background = "rgba(0,200,255,0.05)";
 
-    // Inject AI board panel (same layout as PVP opponent panel)
+    // Inject AI board INSIDE the side-panel, at the very top (before active protocol block)
+    const sidePanel = document.querySelector(".side-panel");
     const panel = document.createElement("div");
     panel.id = "opponentPanel";
+    panel.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:10px;";
     panel.innerHTML = `
+      <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); align-self:flex-start;">
+        // RITUAL_AI
+      </div>
       <div style="
-        display:flex; flex-direction:column; align-items:center; gap:10px;
-        padding:0 0 0 20px;
-      ">
-        <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); margin-bottom:4px;">
-          // RITUAL_AI
-        </div>
+        font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
+        text-align:center; line-height:1.6; align-self:flex-start;
+      ">PIERRE DELLACHERIE ALGORITHM</div>
+      <div style="position:relative; width:100%;">
+        <canvas id="aiCanvas"
+          style="display:block; width:100%; border:1px solid rgba(0,200,255,0.4);
+                 background:#000; box-shadow:0 0 20px rgba(0,200,255,0.15);
+                 image-rendering:pixelated;">
+        </canvas>
         <div style="
-          font-size:0.55rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
-          text-align:center; margin-bottom:2px; line-height:1.6;
-        ">PIERRE DELLACHERIE<br>ALGORITHM</div>
-        <div style="position:relative;">
-          <canvas id="aiCanvas" width="150" height="300"
-            style="display:block; border:1px solid rgba(0,200,255,0.4);
-                   background:#000; box-shadow:0 0 20px rgba(0,200,255,0.15);
-                   image-rendering:pixelated;">
-          </canvas>
-          <div style="
-            position:absolute; top:6px; right:6px;
-            width:8px; height:8px; border-radius:50%;
-            background:#00ccff;
-            box-shadow:0 0 6px #00ccff;
-            animation:blink 1.2s infinite;
-          "></div>
+          position:absolute; top:6px; right:6px;
+          width:8px; height:8px; border-radius:50%;
+          background:#00ccff; box-shadow:0 0 6px #00ccff;
+          animation:blink 1.2s infinite;
+        "></div>
+      </div>
+      <div style="display:flex; gap:6px; width:100%;">
+        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
+          <div style="font-size:0.5rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">// AI SCORE</div>
+          <div id="aiScoreVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">00000</div>
         </div>
-        <div style="border:1px solid rgba(0,200,255,0.15); background:#060606;
-             padding:10px 14px; width:150px;">
-          <div style="font-size:0.55rem; letter-spacing:2px;
-               color:rgba(0,200,255,0.35); margin-bottom:6px;">// AI SCORE</div>
-          <div id="aiScoreVal" style="
-            font-family:'Orbitron',monospace; font-size:1.1rem; font-weight:700;
-            color:#00ccff; letter-spacing:2px;">00000</div>
-        </div>
-        <div style="display:flex; gap:6px; width:150px;">
-          <div style="flex:1; border:1px solid rgba(0,200,255,0.15); background:#060606;
-               padding:8px 10px;">
-            <div style="font-size:0.5rem; letter-spacing:1px;
-                 color:rgba(0,200,255,0.35); margin-bottom:4px;">LV</div>
-            <div id="aiLevelVal" style="
-              font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700;
-              color:#00ccff; letter-spacing:1px;">01</div>
-          </div>
-          <div style="flex:1; border:1px solid rgba(0,200,255,0.15); background:#060606;
-               padding:8px 10px;">
-            <div style="font-size:0.5rem; letter-spacing:1px;
-                 color:rgba(0,200,255,0.35); margin-bottom:4px;">LINES</div>
-            <div id="aiLinesVal" style="
-              font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700;
-              color:#00ccff; letter-spacing:1px;">000</div>
+        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
+          <div style="font-size:0.5rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">LV / LINES</div>
+          <div style="display:flex; gap:6px; align-items:baseline;">
+            <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">01</div>
+            <div style="font-size:0.5rem; color:rgba(0,200,255,0.35);">/</div>
+            <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">000</div>
           </div>
         </div>
       </div>
+      <div style="height:1px; width:100%; background:linear-gradient(90deg,transparent,rgba(0,200,255,0.2),transparent); margin:4px 0;"></div>
     `;
-    gameScreen.appendChild(panel);
-    gameScreen.style.justifyContent = "center";
-    gameScreen.style.gap = "20px";
+    // Insert at the TOP of side-panel (before all existing children)
+    sidePanel.insertBefore(panel, sidePanel.firstChild);
+    // Size the AI canvas proportionally: same aspect ratio as player board (10x20)
+    const aiCanvas = panel.querySelector("#aiCanvas");
+    const panelWidth = sidePanel.offsetWidth || 200;
+    const aiW = panelWidth - 0; // full panel width
+    const aiH = Math.round(aiW * 2); // 10:20 = 1:2 ratio
+    aiCanvas.width  = aiW;
+    aiCanvas.height = aiH;
+    // Reset game area styles (no extra gap needed)
+    gameScreen.style.justifyContent = "";
+    gameScreen.style.gap = "";
   } else {
     modeLabel.textContent  = "SINGLE PLAYER";
     modeLabel.style.borderColor = "";
@@ -1089,7 +1083,8 @@ function drawAiBoard() {
   const aiCanvas = document.getElementById("aiCanvas");
   if (!aiCanvas || !aiBoard) return;
   const ac  = aiCanvas.getContext("2d");
-  const AB  = Math.floor(aiCanvas.width / COLS);
+  // Use the canvas's actual pixel width (set as attribute in setupGameScreenForMode)
+  const AB  = Math.floor((aiCanvas.width || 150) / COLS);
   ac.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
 
   // Draw locked cells
@@ -1537,36 +1532,41 @@ async function shareToX() {
   sc.font = "9px 'Courier New'";
   sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, 494);
 
-  // Convert to blob and download + open Twitter
-  shareCanvas.toBlob(async (blob) => {
-    if (!blob) return;
+  // Build tweet text
+  const modeStr  = currentMode === "pvp" ? "PVP Arena" : currentMode === "vs-ai" ? "vs AI" : "Solo Mode";
+  const resultStr = currentMode === "vs-ai"
+    ? (score > opponentScore ? "🤖 Beat the AI!" : score === opponentScore ? "🤝 Draw vs AI" : "🤖 AI Wins")
+    : (currentMode === "pvp" ? score >= opponentScore : score >= TARGET)
+      ? "🏆 VICTORY"
+      : "💀 Game Over";
+  const tweet = encodeURIComponent(
+    `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
+    `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
+    `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
+    `🕹️ Play here: https://ritual-tetris.vercel.app/\n\n` +
+    `@0xEyesofEtresia @Ritualnet\n` +
+    `#RitualTestnet`
+  );
 
-    // Download image
+  // Open Twitter IMMEDIATELY (synchronous, before any async) to avoid popup blocker
+  const twitterWindow = window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
+  if (!twitterWindow) {
+    // If popup was blocked, show a fallback link in the modal
+    const shareBtn = document.getElementById("shareXBtn");
+    if (shareBtn) {
+      shareBtn.innerHTML = `<a href="https://x.com/intent/tweet?text=${tweet}" target="_blank" style="color:inherit;text-decoration:none;">𝕏 OPEN TWITTER (click here)</a>`;
+    }
+  }
+
+  // Download the share image (async is fine for download)
+  shareCanvas.toBlob((blob) => {
+    if (!blob) return;
     const url  = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.download = `ritual-tetris-${Date.now()}.png`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
-
-    // Brief delay then open Twitter intent
-    await new Promise(r => setTimeout(r, 400));
-
-    const modeStr  = currentMode === "pvp" ? "PVP Arena" : currentMode === "vs-ai" ? "vs AI" : "Solo Mode";
-    const resultStr = currentMode === "vs-ai"
-      ? (score > opponentScore ? "🤖 Beat the AI!" : score === opponentScore ? "🤝 Draw vs AI" : "🤖 AI Wins")
-      : (currentMode === "pvp" ? score >= opponentScore : score >= TARGET)
-        ? "🏆 VICTORY"
-        : "💀 Game Over";
-    const tweet = encodeURIComponent(
-      `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
-      `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
-      `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
-      `🕹️ Play here: https://ritual-tetris.vercel.app/\n\n` +
-      `@0xEyesofEtresia @Ritualnet\n` +
-      `#RitualTestnet`
-    );
-    window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
   }, "image/png");
 }
 
