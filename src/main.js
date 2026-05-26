@@ -1313,6 +1313,11 @@ function showResult(mode) {
         <button class="ritual-btn result-share-btn" id="shareXBtn">
           𝕏 SHARE TO X
         </button>
+        ${((isVsAi && myWon && !isDraw) || (!isPvp && !isVsAi && score >= TARGET) || (isPvp && myWon && !isDraw)) && contract ? `
+        <button class="ritual-btn result-claim-btn" id="resClaimBtn">
+          ⚡ CLAIM REWARD
+        </button>
+        ` : ''}
         <button class="ritual-btn" id="resRestartBtn">↺ PLAY AGAIN</button>
         <button class="ritual-btn danger" id="resExitBtn">⏹ EXIT</button>
       </div>
@@ -1327,6 +1332,31 @@ function showResult(mode) {
 
   // Button listeners
   modal.querySelector("#shareXBtn").addEventListener("click", shareToX);
+
+  // Claim reward button (if applicable)
+  const claimBtn = modal.querySelector("#resClaimBtn");
+  if (claimBtn) {
+    claimBtn.addEventListener("click", async () => {
+      claimBtn.disabled = true;
+      claimBtn.textContent = "⏳ CLAIMING...";
+      try {
+        if (isVsAi && myWon && !isDraw && contract) {
+          await claimSingleReward();
+        } else if (!isPvp && !isVsAi && score >= TARGET && contract) {
+          await claimSingleReward();
+        } else if (isPvp && myWon && !isDraw && contract && pvpMatchId !== null) {
+          await claimPvpReward();
+        }
+        claimBtn.textContent = "✅ REWARD CLAIMED!";
+        claimBtn.style.borderColor = "rgba(0,255,157,0.6)";
+        claimBtn.style.color = "#00ff9d";
+      } catch(e) {
+        claimBtn.disabled = false;
+        claimBtn.textContent = "⚡ CLAIM REWARD";
+      }
+    });
+  }
+
   modal.querySelector("#resRestartBtn").addEventListener("click", async () => {
     closeResult();
     if (currentMode === "single") {
@@ -1345,11 +1375,6 @@ function showResult(mode) {
   // Sound
   if ((isPvp && myWon && !isDraw) || (!isPvp && score >= TARGET)) sfxWin();
   else if (!isDraw) sfxLose();
-
-  // Claim reward if applicable
-  if (!isPvp && !isVsAi && score >= TARGET && contract) claimSingleReward();
-  if (isVsAi && myWon && !isDraw && contract) claimSingleReward(); // menang vs AI = claim solo reward
-  if (isPvp && myWon && !isDraw && contract && pvpMatchId !== null) claimPvpReward();
 }
 
 function closeResult() {
@@ -1515,8 +1540,9 @@ async function shareToX() {
   sc.fillText(String(lines).padStart(3,"0"), sx + 12, sy + 166);
 
   // Result badge
-  const isPvp = currentMode === "pvp";
-  const won   = isPvp ? score >= opponentScore : score >= TARGET;
+  const isPvp  = currentMode === "pvp";
+  const isVsAi = currentMode === "vs-ai";
+  const won    = (isPvp || isVsAi) ? score >= opponentScore : score >= TARGET;
   sc.fillStyle = won ? "rgba(0,255,157,0.1)" : "rgba(255,51,102,0.1)";
   sc.strokeStyle = won ? "#00ff9d" : "#ff3366";
   sc.lineWidth = 1;
@@ -1693,6 +1719,22 @@ function injectResultStyles() {
       background: rgba(255,255,255,0.05) !important;
       border-color: #fff !important;
       box-shadow: 0 0 16px rgba(255,255,255,0.15) !important;
+    }
+    .result-claim-btn {
+      border-color: rgba(255,204,0,0.5) !important;
+      background: rgba(255,204,0,0.06) !important;
+      color: #ffcc00 !important;
+      flex: 1;
+      letter-spacing: 2px;
+    }
+    .result-claim-btn:hover {
+      background: rgba(255,204,0,0.12) !important;
+      border-color: #ffcc00 !important;
+      box-shadow: 0 0 16px rgba(255,204,0,0.2) !important;
+    }
+    .result-claim-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
     }
     .ritual-btn.danger {
       border-color: rgba(255,0,100,0.4);
