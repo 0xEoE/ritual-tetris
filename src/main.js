@@ -1,7 +1,8 @@
 // ══════════════════════════════════════════════
-//  RITUAL TETRIS — main.js  (Enhanced PVP Edition)
+//  RITUAL TETRIS — main.js  (AI Edition)
 //  + PVP Waiting Room + Live Opponent Board
 //  + Result Modal with Board Capture & Share to X
+//  + vs AI Mode (Pierre Dellacherie Algorithm)
 // ══════════════════════════════════════════════
 
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
@@ -567,8 +568,13 @@ function spawnNext() {
     if (currentMode === "pvp") {
       sendPvpUpdate("GAME_OVER", { score, lines, level });
       clearInterval(pvpSyncInterval);
-      // Wait briefly for opponent result before showing popup
       setTimeout(() => showResult("pvp"), 800);
+    } else if (currentMode === "vs-ai") {
+      stopAi();
+      // Use opponentScore/Lines to hold AI final score for result display
+      opponentScore = aiScore;
+      opponentLines = aiLines;
+      showResult("vs-ai");
     } else {
       showResult("single");
     }
@@ -611,11 +617,12 @@ function startGame(mode) {
   animFrameId = requestAnimationFrame(gameLoop);
 
   if (mode === "pvp") {
-    // Send initial board state immediately
     syncBoardToPvp();
-    // Periodic sync every 500ms for smooth live updates
     clearInterval(pvpSyncInterval);
     pvpSyncInterval = setInterval(syncBoardToPvp, 500);
+  }
+  if (mode === "vs-ai") {
+    startAi();
   }
 }
 
@@ -735,6 +742,72 @@ function setupGameScreenForMode(mode) {
     gameScreen.appendChild(panel);
     gameScreen.style.justifyContent = "center";
     gameScreen.style.gap = "20px";
+  } else if (mode === "vs-ai") {
+    modeLabel.textContent  = "VS AI";
+    modeLabel.style.borderColor = "rgba(0,200,255,0.3)";
+    modeLabel.style.color  = "#00ccff";
+    modeLabel.style.background = "rgba(0,200,255,0.05)";
+
+    // Inject AI board panel (same layout as PVP opponent panel)
+    const panel = document.createElement("div");
+    panel.id = "opponentPanel";
+    panel.innerHTML = `
+      <div style="
+        display:flex; flex-direction:column; align-items:center; gap:10px;
+        padding:0 0 0 20px;
+      ">
+        <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); margin-bottom:4px;">
+          // RITUAL_AI
+        </div>
+        <div style="
+          font-size:0.55rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
+          text-align:center; margin-bottom:2px; line-height:1.6;
+        ">PIERRE DELLACHERIE<br>ALGORITHM</div>
+        <div style="position:relative;">
+          <canvas id="aiCanvas" width="150" height="300"
+            style="display:block; border:1px solid rgba(0,200,255,0.4);
+                   background:#000; box-shadow:0 0 20px rgba(0,200,255,0.15);
+                   image-rendering:pixelated;">
+          </canvas>
+          <div style="
+            position:absolute; top:6px; right:6px;
+            width:8px; height:8px; border-radius:50%;
+            background:#00ccff;
+            box-shadow:0 0 6px #00ccff;
+            animation:blink 1.2s infinite;
+          "></div>
+        </div>
+        <div style="border:1px solid rgba(0,200,255,0.15); background:#060606;
+             padding:10px 14px; width:150px;">
+          <div style="font-size:0.55rem; letter-spacing:2px;
+               color:rgba(0,200,255,0.35); margin-bottom:6px;">// AI SCORE</div>
+          <div id="aiScoreVal" style="
+            font-family:'Orbitron',monospace; font-size:1.1rem; font-weight:700;
+            color:#00ccff; letter-spacing:2px;">00000</div>
+        </div>
+        <div style="display:flex; gap:6px; width:150px;">
+          <div style="flex:1; border:1px solid rgba(0,200,255,0.15); background:#060606;
+               padding:8px 10px;">
+            <div style="font-size:0.5rem; letter-spacing:1px;
+                 color:rgba(0,200,255,0.35); margin-bottom:4px;">LV</div>
+            <div id="aiLevelVal" style="
+              font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700;
+              color:#00ccff; letter-spacing:1px;">01</div>
+          </div>
+          <div style="flex:1; border:1px solid rgba(0,200,255,0.15); background:#060606;
+               padding:8px 10px;">
+            <div style="font-size:0.5rem; letter-spacing:1px;
+                 color:rgba(0,200,255,0.35); margin-bottom:4px;">LINES</div>
+            <div id="aiLinesVal" style="
+              font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700;
+              color:#00ccff; letter-spacing:1px;">000</div>
+          </div>
+        </div>
+      </div>
+    `;
+    gameScreen.appendChild(panel);
+    gameScreen.style.justifyContent = "center";
+    gameScreen.style.gap = "20px";
   } else {
     modeLabel.textContent  = "SINGLE PLAYER";
     modeLabel.style.borderColor = "";
@@ -755,6 +828,383 @@ function updateUI() {
   if (barEl)   barEl.style.width   = Math.min((score / TARGET) * 100, 100) + "%";
 }
 
+
+// ══════════════════════════════════════════════
+//  AI ENGINE — Pierre Dellacherie Algorithm
+//  Evaluates every possible placement for the
+//  current piece and picks the best one based on
+//  weighted heuristics. Near-superhuman level.
+// ══════════════════════════════════════════════
+
+// AI state
+let aiBoard = null;          // AI's own board (separate from player's)
+let aiScore = 0;
+let aiLines = 0;
+let aiLevel = 1;
+let aiCurrentPiece = null;
+let aiNextPiece    = null;
+let aiPieceX = 0;
+let aiPieceY = 0;
+let aiDropInterval = 120;    // AI drops fast — feels superhuman
+let aiLastDrop = 0;
+let aiAnimFrameId = null;
+let aiRunning = false;
+let aiMoveQueue = [];        // queued moves to animate (left/right/rotate)
+let aiMoveTimer = null;
+let aiGameOver = false;
+
+// ── AI Heuristic weights (tuned for aggressive line clearing) ──
+const AI_WEIGHTS = {
+  linesCleared:    3.5,   // reward clearing lines
+  holes:          -4.0,   // punish holes hard
+  bumpiness:      -1.8,   // punish uneven surface
+  aggregateHeight:-2.0,   // punish tall stacks
+  wellDepth:       1.2,   // reward deep wells (for I pieces)
+};
+
+// Clone a board (2D array)
+function cloneBoard(b) {
+  return b.map(row => [...row]);
+}
+
+// Try to place a piece at given x, rotation on a board — returns final Y or -1 if invalid
+function aiDropPiece(b, shape, startX) {
+  let y = 0;
+  // Find lowest valid Y
+  while (!aiCollideAt(b, shape, startX, y + 1)) y++;
+  // Check it's a valid placement (piece fits at y=0 at least)
+  if (aiCollideAt(b, shape, startX, 0)) return { y: -1, valid: false };
+  return { y, valid: true };
+}
+
+function aiCollideAt(b, shape, nx, ny) {
+  return shape.some((row, dy) =>
+    row.some((v, dx) => v && (
+      nx + dx < 0 || nx + dx >= COLS || ny + dy >= ROWS ||
+      (ny + dy >= 0 && b[ny + dy]?.[nx + dx])
+    ))
+  );
+}
+
+function aiRotateShape(shape) {
+  return shape[0].map((_, i) => shape.map(row => row[i]).reverse());
+}
+
+// Place piece on cloned board, return new board
+function aiMergePiece(b, shape, x, y, color) {
+  const nb = cloneBoard(b);
+  shape.forEach((row, dy) => row.forEach((v, dx) => {
+    if (v && y + dy >= 0) nb[y + dy][x + dx] = color;
+  }));
+  return nb;
+}
+
+// Clear lines, return { board, cleared }
+function aiClearLines(b) {
+  let cleared = 0;
+  const nb = b.filter(row => {
+    if (row.every(cell => cell)) { cleared++; return false; }
+    return true;
+  });
+  while (nb.length < ROWS) nb.unshift(Array(COLS).fill(null));
+  return { board: nb, cleared };
+}
+
+// Count holes (empty cells with a filled cell above)
+function countHoles(b) {
+  let holes = 0;
+  for (let c = 0; c < COLS; c++) {
+    let blockFound = false;
+    for (let r = 0; r < ROWS; r++) {
+      if (b[r][c]) blockFound = true;
+      else if (blockFound) holes++;
+    }
+  }
+  return holes;
+}
+
+// Column heights
+function getHeights(b) {
+  return Array.from({ length: COLS }, (_, c) => {
+    for (let r = 0; r < ROWS; r++) if (b[r][c]) return ROWS - r;
+    return 0;
+  });
+}
+
+// Bumpiness = sum of absolute differences between adjacent columns
+function getBumpiness(heights) {
+  let bump = 0;
+  for (let i = 0; i < heights.length - 1; i++) bump += Math.abs(heights[i] - heights[i + 1]);
+  return bump;
+}
+
+// Well depth (column much lower than both neighbors — good for I piece)
+function getWellDepth(heights) {
+  let total = 0;
+  for (let i = 0; i < heights.length; i++) {
+    const left  = i > 0               ? heights[i - 1] : 99;
+    const right = i < heights.length-1 ? heights[i + 1] : 99;
+    const well  = Math.min(left, right) - heights[i];
+    if (well > 0) total += well;
+  }
+  return total;
+}
+
+// Evaluate a board state — higher is better
+function evaluateBoard(b, linesCleared) {
+  const heights  = getHeights(b);
+  const aggH     = heights.reduce((a, b) => a + b, 0);
+  const holes    = countHoles(b);
+  const bump     = getBumpiness(heights);
+  const well     = getWellDepth(heights);
+  return (
+    AI_WEIGHTS.linesCleared    * linesCleared +
+    AI_WEIGHTS.holes           * holes        +
+    AI_WEIGHTS.bumpiness       * bump         +
+    AI_WEIGHTS.aggregateHeight * aggH         +
+    AI_WEIGHTS.wellDepth       * well
+  );
+}
+
+// Find the best move for the current piece on a given board
+function aiFindBestMove(b, piece) {
+  let bestScore = -Infinity;
+  let bestMove  = { rotations: 0, x: 0 };
+  let shape = piece.shape;
+
+  for (let rot = 0; rot < 4; rot++) {
+    const w = shape[0].length;
+    for (let x = -1; x <= COLS - w + 1; x++) {
+      const { y, valid } = aiDropPiece(b, shape, x);
+      if (!valid) continue;
+      const merged = aiMergePiece(b, shape, x, y, piece.color);
+      const { board: cleared, cleared: numCleared } = aiClearLines(merged);
+      const score = evaluateBoard(cleared, numCleared);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove  = { rotations: rot, x, y };
+      }
+    }
+    shape = aiRotateShape(shape);
+  }
+  return bestMove;
+}
+
+// Execute AI move: queue the rotation + translation steps, then hard-drop
+function aiExecuteMove(move) {
+  const steps = [];
+  // Queue rotations
+  for (let i = 0; i < move.rotations; i++) steps.push("rotate");
+  // Queue horizontal moves
+  const dx = move.x - aiPieceX;
+  const dir = dx > 0 ? "right" : "left";
+  for (let i = 0; i < Math.abs(dx); i++) steps.push(dir);
+  // Final hard drop
+  steps.push("drop");
+  aiMoveQueue = steps;
+  aiProcessMoveQueue();
+}
+
+function aiProcessMoveQueue() {
+  if (!aiRunning || aiMoveQueue.length === 0) return;
+  const action = aiMoveQueue.shift();
+
+  if (action === "rotate") {
+    const rotated = aiRotateShape(aiCurrentPiece.shape);
+    // Try kick if needed
+    let kicked = false;
+    for (const kick of [0, 1, -1, 2, -2]) {
+      if (!aiCollideAt(aiBoard, rotated, aiPieceX + kick, aiPieceY)) {
+        aiCurrentPiece.shape = rotated;
+        aiPieceX += kick;
+        kicked = true;
+        break;
+      }
+    }
+  } else if (action === "right") {
+    if (!aiCollideAt(aiBoard, aiCurrentPiece.shape, aiPieceX + 1, aiPieceY)) aiPieceX++;
+  } else if (action === "left") {
+    if (!aiCollideAt(aiBoard, aiCurrentPiece.shape, aiPieceX - 1, aiPieceY)) aiPieceX--;
+  } else if (action === "drop") {
+    // Hard drop
+    while (!aiCollideAt(aiBoard, aiCurrentPiece.shape, aiPieceX, aiPieceY + 1)) aiPieceY++;
+    aiLockAndSpawn();
+    return;
+  }
+
+  // Draw AI board after each step
+  drawAiBoard();
+  // Continue queue with small delay so moves are visible
+  aiMoveTimer = setTimeout(aiProcessMoveQueue, 40);
+}
+
+function aiLockAndSpawn() {
+  // Merge piece into AI board
+  aiCurrentPiece.shape.forEach((row, dy) => row.forEach((v, dx) => {
+    if (v && aiPieceY + dy >= 0) aiBoard[aiPieceY + dy][aiPieceX + dx] = aiCurrentPiece.color;
+  }));
+
+  // Clear lines
+  let cleared = 0;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (aiBoard[r].every(cell => cell)) {
+      aiBoard.splice(r, 1);
+      aiBoard.unshift(Array(COLS).fill(null));
+      cleared++; r++;
+    }
+  }
+  if (cleared) {
+    const pts = [0, 100, 300, 500, 800][cleared] * aiLevel;
+    aiScore += pts;
+    aiLines += cleared;
+    aiLevel  = Math.floor(aiLines / 10) + 1;
+    updateAiUI();
+  }
+
+  drawAiBoard();
+
+  // Spawn next
+  aiCurrentPiece = aiNextPiece;
+  aiNextPiece    = randomPiece();
+  aiPieceX = Math.floor(COLS / 2) - Math.floor(aiCurrentPiece.shape[0].length / 2);
+  aiPieceY = 0;
+
+  // Check game over for AI (it almost never loses)
+  if (aiCollideAt(aiBoard, aiCurrentPiece.shape, aiPieceX, aiPieceY)) {
+    aiGameOver = true;
+    aiRunning  = false;
+    updateAiUI();
+    return;
+  }
+
+  // Plan next move
+  if (aiRunning) {
+    const move = aiFindBestMove(aiBoard, aiCurrentPiece);
+    setTimeout(() => aiExecuteMove(move), 180); // small pause between pieces
+  }
+}
+
+// ── Draw AI board onto #aiCanvas ──
+function drawAiBoard() {
+  const aiCanvas = document.getElementById("aiCanvas");
+  if (!aiCanvas || !aiBoard) return;
+  const ac  = aiCanvas.getContext("2d");
+  const AB  = Math.floor(aiCanvas.width / COLS);
+  ac.clearRect(0, 0, aiCanvas.width, aiCanvas.height);
+
+  // Draw locked cells
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const color = aiBoard[r][c];
+      if (color) {
+        ac.save();
+        ac.globalAlpha = 0.85;
+        ac.fillStyle = color;
+        ac.fillRect(c * AB + 1, r * AB + 1, AB - 2, AB - 2);
+        ac.globalAlpha = 1;
+        const g = ac.createLinearGradient(c*AB, r*AB, c*AB+AB, r*AB+AB);
+        g.addColorStop(0,   "rgba(255,255,255,0.42)");
+        g.addColorStop(0.4, "rgba(255,255,255,0.08)");
+        g.addColorStop(1,   "rgba(0,0,0,0.28)");
+        ac.fillStyle = g;
+        ac.fillRect(c * AB + 1, r * AB + 1, AB - 2, AB - 2);
+        ac.shadowColor = color;
+        ac.shadowBlur  = 8;
+        ac.strokeStyle = color;
+        ac.lineWidth   = 1;
+        ac.strokeRect(c * AB + 1.5, r * AB + 1.5, AB - 3, AB - 3);
+        ac.shadowBlur  = 0;
+        ac.fillStyle = "rgba(255,255,255,0.5)";
+        ac.fillRect(c * AB + 2, r * AB + 2, AB - 4, 1.5);
+        ac.fillRect(c * AB + 2, r * AB + 2, 1.5, AB - 4);
+        ac.restore();
+      } else {
+        ac.strokeStyle = "rgba(0,200,255,0.04)";
+        ac.lineWidth   = 0.5;
+        ac.strokeRect(c * AB, r * AB, AB, AB);
+      }
+    }
+  }
+
+  // Draw current AI piece with ghost
+  if (aiCurrentPiece && aiRunning) {
+    // Ghost
+    let ghostY = aiPieceY;
+    while (!aiCollideAt(aiBoard, aiCurrentPiece.shape, aiPieceX, ghostY + 1)) ghostY++;
+    if (ghostY !== aiPieceY) {
+      ac.globalAlpha = 0.12;
+      ac.fillStyle = aiCurrentPiece.color;
+      aiCurrentPiece.shape.forEach((row, dy) => row.forEach((v, dx) => {
+        if (v) ac.fillRect((aiPieceX + dx) * AB, (ghostY + dy) * AB, AB, AB);
+      }));
+      ac.globalAlpha = 1;
+    }
+    // Active piece
+    aiCurrentPiece.shape.forEach((row, dy) => row.forEach((v, dx) => {
+      if (v && aiPieceY + dy >= 0) {
+        ac.save();
+        ac.globalAlpha = 0.9;
+        ac.fillStyle = aiCurrentPiece.color;
+        ac.fillRect((aiPieceX + dx) * AB + 1, (aiPieceY + dy) * AB + 1, AB - 2, AB - 2);
+        ac.globalAlpha = 1;
+        ac.fillStyle = "rgba(255,255,255,0.5)";
+        ac.fillRect((aiPieceX + dx) * AB + 2, (aiPieceY + dy) * AB + 2, AB - 4, 1.5);
+        ac.restore();
+      }
+    }));
+  }
+
+  // Grid
+  ac.strokeStyle = "rgba(0,200,255,0.04)";
+  ac.lineWidth = 0.5;
+  for (let c = 0; c <= COLS; c++) {
+    ac.beginPath(); ac.moveTo(c * AB, 0); ac.lineTo(c * AB, aiCanvas.height); ac.stroke();
+  }
+  for (let r = 0; r <= ROWS; r++) {
+    ac.beginPath(); ac.moveTo(0, r * AB); ac.lineTo(aiCanvas.width, r * AB); ac.stroke();
+  }
+}
+
+// ── Update AI panel stats ──
+function updateAiUI() {
+  const el = document.getElementById("aiScoreVal");
+  if (el) el.textContent = String(aiScore).padStart(5, "0");
+  const ll = document.getElementById("aiLinesVal");
+  if (ll) ll.textContent = String(aiLines).padStart(3, "0");
+  const lv = document.getElementById("aiLevelVal");
+  if (lv) lv.textContent = String(aiLevel).padStart(2, "0");
+}
+
+// ── Start AI engine ──
+function startAi() {
+  aiBoard        = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  aiScore        = 0;
+  aiLines        = 0;
+  aiLevel        = 1;
+  aiGameOver     = false;
+  aiRunning      = true;
+  aiMoveQueue    = [];
+  aiCurrentPiece = randomPiece();
+  aiNextPiece    = randomPiece();
+  aiPieceX       = Math.floor(COLS / 2) - Math.floor(aiCurrentPiece.shape[0].length / 2);
+  aiPieceY       = 0;
+  updateAiUI();
+
+  // Kick off first move after a short intro pause
+  setTimeout(() => {
+    if (!aiRunning) return;
+    const move = aiFindBestMove(aiBoard, aiCurrentPiece);
+    aiExecuteMove(move);
+  }, 600);
+}
+
+// ── Stop AI engine ──
+function stopAi() {
+  aiRunning = false;
+  clearTimeout(aiMoveTimer);
+  aiMoveQueue = [];
+}
+
 // ══════════════════════════════════════════════
 //  RESULT MODAL (Single + PVP) with Share to X
 // ══════════════════════════════════════════════
@@ -770,42 +1220,45 @@ function showResult(mode) {
   }
 
   const isPvp    = mode === "pvp";
-  const myWon    = isPvp ? (score >= opponentScore) : (score >= TARGET);
-  const isDraw   = isPvp && score === opponentScore;
+  const isVsAi   = mode === "vs-ai";
+  const myWon    = (isPvp || isVsAi) ? (score >= opponentScore) : (score >= TARGET);
+  const isDraw   = (isPvp || isVsAi) && score === opponentScore;
 
   // Determine header info
   let headerTag, headerTitle, headerColor;
-  if (!isPvp) {
+  if (!isPvp && !isVsAi) {
     headerTag   = "// SESSION TERMINATED";
     headerTitle = score >= TARGET ? "VICTORY" : "GAME OVER";
     headerColor = score >= TARGET ? "#00ff9d" : "#ff3366";
   } else if (isDraw) {
-    headerTag   = "// PVP MATCH RESULT";
+    headerTag   = isVsAi ? "// VS AI RESULT" : "// PVP MATCH RESULT";
     headerTitle = "DRAW";
     headerColor = "#ffcc00";
   } else if (myWon) {
-    headerTag   = "// PVP MATCH RESULT";
-    headerTitle = "VICTORY";
+    headerTag   = isVsAi ? "// VS AI RESULT" : "// PVP MATCH RESULT";
+    headerTitle = isVsAi ? "YOU BEAT THE AI!" : "VICTORY";
     headerColor = "#00ff9d";
   } else {
-    headerTag   = "// PVP MATCH RESULT";
-    headerTitle = "DEFEATED";
+    headerTag   = isVsAi ? "// VS AI RESULT" : "// PVP MATCH RESULT";
+    headerTitle = isVsAi ? "AI WINS" : "DEFEATED";
     headerColor = "#ff3366";
   }
 
-  const pvpRows = isPvp ? `
+  const oppLabel  = isVsAi ? "RITUAL AI" : "OPPONENT";
+  const oppColor  = isVsAi ? "#00ccff"   : "#ff00cc";
+  const pvpRows = (isPvp || isVsAi) ? `
     <div class="result-vs-row">
       <div class="result-vs-col">
         <div class="result-vs-label">YOU</div>
         <div class="result-vs-score" style="color:${myWon && !isDraw ? '#00ff9d':'#ccff00'}">
           ${String(score).padStart(5,"0")}
         </div>
-        <div class="result-vs-sub">${lines} LINES · LV${level}</div>
+        <div class="result-vs-sub">${lines} LINES · LV${level}${isVsAi && myWon && !isDraw ? ' · REWARD CLAIMED' : ''}</div>
       </div>
       <div class="result-vs-divider">VS</div>
       <div class="result-vs-col">
-        <div class="result-vs-label">OPPONENT</div>
-        <div class="result-vs-score" style="color:${!myWon && !isDraw ? '#00ff9d':'#ff00cc'}">
+        <div class="result-vs-label">${oppLabel}</div>
+        <div class="result-vs-score" style="color:${!myWon && !isDraw ? '#00ff9d': oppColor}">
           ${String(opponentScore).padStart(5,"0")}
         </div>
         <div class="result-vs-sub">${opponentLines} LINES</div>
@@ -870,6 +1323,8 @@ function showResult(mode) {
     closeResult();
     if (currentMode === "single") {
       if (await payEntry("single")) startGame("single");
+    } else if (currentMode === "vs-ai") {
+      if (await payEntry("single")) startGame("vs-ai");
     } else {
       showPvpWaiting();
     }
@@ -884,7 +1339,8 @@ function showResult(mode) {
   else if (!isDraw) sfxLose();
 
   // Claim reward if applicable
-  if (!isPvp && score >= TARGET && contract) claimSingleReward();
+  if (!isPvp && !isVsAi && score >= TARGET && contract) claimSingleReward();
+  if (isVsAi && myWon && !isDraw && contract) claimSingleReward(); // menang vs AI = claim solo reward
   if (isPvp && myWon && !isDraw && contract && pvpMatchId !== null) claimPvpReward();
 }
 
@@ -1073,7 +1529,7 @@ async function shareToX() {
   sc.fillStyle = "#ffcc00";
   sc.font = "9px 'Courier New'";
   sc.textAlign = "center";
-  sc.fillText(isPvp ? "PVP ARENA" : "SOLO MODE", sx + sw / 2, sy + 280);
+  sc.fillText(isPvp ? "PVP ARENA" : isVsAi ? "VS AI" : "SOLO MODE", sx + sw / 2, sy + 280);
   sc.textAlign = "left";
 
   // Footer
@@ -1096,10 +1552,12 @@ async function shareToX() {
     // Brief delay then open Twitter intent
     await new Promise(r => setTimeout(r, 400));
 
-    const modeStr  = currentMode === "pvp" ? "PVP Arena" : "Solo Mode";
-    const resultStr = (currentMode === "pvp" ? score >= opponentScore : score >= TARGET)
-      ? "🏆 VICTORY"
-      : "💀 Game Over";
+    const modeStr  = currentMode === "pvp" ? "PVP Arena" : currentMode === "vs-ai" ? "vs AI" : "Solo Mode";
+    const resultStr = currentMode === "vs-ai"
+      ? (score > opponentScore ? "🤖 Beat the AI!" : score === opponentScore ? "🤝 Draw vs AI" : "🤖 AI Wins")
+      : (currentMode === "pvp" ? score >= opponentScore : score >= TARGET)
+        ? "🏆 VICTORY"
+        : "💀 Game Over";
     const tweet = encodeURIComponent(
       `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
       `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
@@ -1783,17 +2241,21 @@ document.getElementById("singleBtn").addEventListener("click", async () => {
 });
 
 document.getElementById("pvpBtn").addEventListener("click", async () => {
-  // pvpMatchId di-set oleh payEntry() saat tangkap receipt — jangan reset sebelumnya
   pvpRole = null;
   if (await payEntry("pvp")) {
-    // pvpMatchId sudah terisi on-chain matchId dari payEntry
     showPvpWaiting();
   }
+});
+
+document.getElementById("vsAiBtn").addEventListener("click", async () => {
+  // vs-AI uses same entry fee as solo (0.001 RITUAL) — no on-chain match needed
+  if (await payEntry("single")) startGame("vs-ai");
 });
 
 document.getElementById("quitBtn").addEventListener("click", async () => {
   gameRunning = false;
   cancelAnimationFrame(animFrameId);
+  if (currentMode === "vs-ai") stopAi();
   await cleanupPvp();
   showScreen("modeScreen");
 });
@@ -1877,7 +2339,7 @@ document.addEventListener("keydown", e => {
   bgAnimate();
 })();
 
-console.log("%c🎮 Ritual Tetris — PVP Edition Loaded", "color:#00ff9d; font-size:16px");
+console.log("%c🎮 Ritual Tetris — AI Edition Loaded", "color:#00ff9d; font-size:16px");
 
 // ── RESPONSIVE CANVAS RESIZE ──────────────────
 window.addEventListener("resize", () => {
