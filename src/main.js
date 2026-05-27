@@ -758,63 +758,67 @@ function setupGameScreenForMode(mode) {
     modeLabel.style.color  = "#00ccff";
     modeLabel.style.background = "rgba(0,200,255,0.05)";
 
-    // Inject AI board INSIDE the side-panel, at the very top (before active protocol block)
-    const sidePanel = document.querySelector(".side-panel");
+    // ── AI panel ditaruh di LUAR side-panel, sejajar dengan board player
+    // (sama seperti PVP opponent panel) agar side-panel tidak overflow
+    const AI_CANVAS_W = 150;
+    const AI_CANVAS_H = 300;
+
     const panel = document.createElement("div");
     panel.id = "opponentPanel";
-    panel.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:8px; flex-shrink:1; min-height:0;";
     panel.innerHTML = `
-      <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); align-self:flex-start;">
-        // RITUAL_AI
-      </div>
       <div style="
-        font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
-        text-align:center; line-height:1.6; align-self:flex-start;
-      ">PIERRE DELLACHERIE ALGORITHM</div>
-      <div style="position:relative; width:100%; flex-shrink:1; min-height:0;">
-        <canvas id="aiCanvas"
-          style="display:block; width:100%; max-width:100%; border:1px solid rgba(0,200,255,0.4);
-                 background:#000; box-shadow:0 0 20px rgba(0,200,255,0.15);
-                 image-rendering:pixelated;">
-        </canvas>
-        <div style="
-          position:absolute; top:6px; right:6px;
-          width:8px; height:8px; border-radius:50%;
-          background:#00ccff; box-shadow:0 0 6px #00ccff;
-          animation:blink 1.2s infinite;
-        "></div>
-      </div>
-      <div style="display:flex; gap:6px; width:100%;">
-        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
-          <div style="font-size:0.5rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">// AI SCORE</div>
-          <div id="aiScoreVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">00000</div>
+        display:flex; flex-direction:column; align-items:center; gap:8px;
+        padding:0 0 0 16px;
+      ">
+        <div style="font-size:0.58rem; letter-spacing:3px; color:rgba(0,200,255,0.55); margin-bottom:2px; align-self:flex-start;">
+          // RITUAL_AI
         </div>
-        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
-          <div style="font-size:0.5rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">LV / LINES</div>
-          <div style="display:flex; gap:6px; align-items:baseline;">
-            <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">01</div>
-            <div style="font-size:0.5rem; color:rgba(0,200,255,0.35);">/</div>
-            <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">000</div>
+        <div style="
+          font-size:0.48rem; letter-spacing:2px; color:rgba(0,200,255,0.3);
+          line-height:1.5; align-self:flex-start; margin-bottom:2px;
+        ">PIERRE DELLACHERIE<br>ALGORITHM</div>
+
+        <div style="position:relative;">
+          <canvas id="aiCanvas" width="${AI_CANVAS_W}" height="${AI_CANVAS_H}"
+            style="display:block;
+                   border:1px solid rgba(0,200,255,0.4);
+                   background:#000;
+                   box-shadow:0 0 20px rgba(0,200,255,0.15);
+                   image-rendering:pixelated;">
+          </canvas>
+          <!-- live indicator dot -->
+          <div style="
+            position:absolute; top:7px; right:7px;
+            width:8px; height:8px; border-radius:50%;
+            background:#00ccff; box-shadow:0 0 8px #00ccff;
+            animation:blink 1.2s infinite;
+          "></div>
+        </div>
+
+        <!-- AI stats below canvas -->
+        <div style="width:${AI_CANVAS_W}px; border:1px solid rgba(0,200,255,0.18); background:#060606; padding:9px 12px;">
+          <div style="font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35); margin-bottom:5px;">// AI SCORE</div>
+          <div id="aiScoreVal" style="
+            font-family:'Orbitron',monospace; font-size:1.05rem; font-weight:700;
+            color:#00ccff; letter-spacing:2px;">00000</div>
+        </div>
+        <div style="display:flex; gap:6px; width:${AI_CANVAS_W}px;">
+          <div style="flex:1; border:1px solid rgba(0,200,255,0.18); background:#060606; padding:8px 10px;">
+            <div style="font-size:0.48rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">LV</div>
+            <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700; color:#00ccff;">01</div>
+          </div>
+          <div style="flex:1; border:1px solid rgba(0,200,255,0.18); background:#060606; padding:8px 10px;">
+            <div style="font-size:0.48rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">LINES</div>
+            <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700; color:#00ccff;">000</div>
           </div>
         </div>
       </div>
-      <div style="height:1px; width:100%; background:linear-gradient(90deg,transparent,rgba(0,200,255,0.2),transparent); margin:4px 0;"></div>
     `;
-    // Insert at the TOP of side-panel (before all existing children)
-    sidePanel.insertBefore(panel, sidePanel.firstChild);
-    // Size the AI canvas: fill panel width, height = width * 2 (10col × 20row ratio)
-    // But cap at 45% of board height so info blocks below always fit
-    const aiCanvas = panel.querySelector("#aiCanvas");
-    const panelW = Math.min(210, Math.round(window.innerWidth * 0.18));
-    const aiW = Math.max(80, panelW - 24);
-    // Cap height: at most 45% of the player board height to leave room for stats
-    const maxAiH = Math.floor(canvas.height * 0.45);
-    const aiH = Math.min(aiW * 2, maxAiH);
-    aiCanvas.width  = aiW;
-    aiCanvas.height = aiH;
-    // Reset game area styles (no extra gap needed)
-    gameScreen.style.justifyContent = "";
-    gameScreen.style.gap = "";
+
+    // Append panel ke gameScreen (setelah side-panel), bukan di dalam side-panel
+    gameScreen.appendChild(panel);
+    gameScreen.style.justifyContent = "center";
+    gameScreen.style.gap = "20px";
   } else {
     modeLabel.textContent  = "SINGLE PLAYER";
     modeLabel.style.borderColor = "";
