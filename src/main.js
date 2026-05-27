@@ -2,7 +2,7 @@
 //  RITUAL TETRIS — main.js  (AI Edition)
 //  + PVP Waiting Room + Live Opponent Board
 //  + Result Modal with Board Capture & Share to X
-//  + vs AI Mode (Pierre Dellacherie + 2-Piece Lookahead BRUTAL)
+//  + vs AI Mode (Pierre Dellacherie Algorithm)
 // ══════════════════════════════════════════════
 
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
@@ -697,10 +697,6 @@ function setupGameScreenForMode(mode) {
   // Remove any existing opponent panel
   const existing = document.getElementById("opponentPanel");
   if (existing) existing.remove();
-  // Reset gameScreen flex styles setiap kali mode berganti
-  gameScreen.style.justifyContent = "";
-  gameScreen.style.alignItems     = "";
-  gameScreen.style.gap            = "";
 
   if (mode === "pvp") {
     modeLabel.textContent  = "PVP ARENA";
@@ -762,69 +758,63 @@ function setupGameScreenForMode(mode) {
     modeLabel.style.color  = "#00ccff";
     modeLabel.style.background = "rgba(0,200,255,0.05)";
 
-    // ── Layout: [AI panel kiri] [board player tengah] [side-panel kanan] ──
-    // AI canvas: lebar = canvas.width / 2 (tampak mini tapi proporsional 1:2)
-    // Tinggi AI canvas = canvas.height (sama tinggi dengan board player)
-    const aiCanvasH = canvas.height;
-    const aiCanvasW = Math.floor(aiCanvasH / 2); // rasio Tetris 1:2
-
+    // Inject AI board INSIDE the side-panel, at the very top (before active protocol block)
+    const sidePanel = document.querySelector(".side-panel");
     const panel = document.createElement("div");
     panel.id = "opponentPanel";
-    panel.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      width: ${aiCanvasW + 24}px;
-      flex-shrink: 0;
-      align-self: flex-start;
-      padding-top: calc(0.6rem + 6px + 1em);
-    `;
+    panel.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:8px; flex-shrink:1; min-height:0;";
     panel.innerHTML = `
-      <div style="font-size:0.58rem; letter-spacing:3px; color:rgba(0,200,255,0.55);">
+      <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); align-self:flex-start;">
         // RITUAL_AI
       </div>
-      <div style="font-size:0.48rem; letter-spacing:2px; color:rgba(0,200,255,0.3); line-height:1.5;">
-        PIERRE DELLACHERIE<br>ALGORITHM
-      </div>
-      <div style="position:relative;">
-        <canvas id="aiCanvas" width="${aiCanvasW}" height="${aiCanvasH}"
-          style="display:block;
-                 border:1px solid rgba(0,200,255,0.4);
-                 background:#000;
-                 box-shadow:0 0 20px rgba(0,200,255,0.15);
+      <div style="
+        font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
+        text-align:center; line-height:1.6; align-self:flex-start;
+      ">NIGHTMARE — 2-PLY LOOKAHEAD</div>
+      <div style="position:relative; width:100%; flex-shrink:1; min-height:0;">
+        <canvas id="aiCanvas"
+          style="display:block; width:100%; max-width:100%; border:1px solid rgba(0,200,255,0.4);
+                 background:#000; box-shadow:0 0 20px rgba(0,200,255,0.15);
                  image-rendering:pixelated;">
         </canvas>
         <div style="
           position:absolute; top:6px; right:6px;
           width:8px; height:8px; border-radius:50%;
-          background:#00ccff; box-shadow:0 0 8px #00ccff;
+          background:#00ccff; box-shadow:0 0 6px #00ccff;
           animation:blink 1.2s infinite;
         "></div>
       </div>
-      <div style="border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
-        <div style="font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35); margin-bottom:5px;">// AI SCORE</div>
-        <div id="aiScoreVal" style="font-family:'Orbitron',monospace; font-size:1rem; font-weight:700; color:#00ccff; letter-spacing:2px;">00000</div>
-      </div>
-      <div style="display:flex; gap:6px;">
-        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:7px 8px;">
-          <div style="font-size:0.46rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:3px;">LV</div>
-          <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700; color:#00ccff;">01</div>
+      <div style="display:flex; gap:6px; width:100%;">
+        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
+          <div style="font-size:0.5rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">// AI SCORE</div>
+          <div id="aiScoreVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">00000</div>
         </div>
-        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:7px 8px;">
-          <div style="font-size:0.46rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:3px;">LINES</div>
-          <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700; color:#00ccff;">000</div>
+        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
+          <div style="font-size:0.5rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:4px;">LV / LINES</div>
+          <div style="display:flex; gap:6px; align-items:baseline;">
+            <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">01</div>
+            <div style="font-size:0.5rem; color:rgba(0,200,255,0.35);">/</div>
+            <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:700; color:#00ccff; letter-spacing:1px;">000</div>
+          </div>
         </div>
       </div>
+      <div style="height:1px; width:100%; background:linear-gradient(90deg,transparent,rgba(0,200,255,0.2),transparent); margin:4px 0;"></div>
     `;
-
-    // Sisipkan AI panel SEBELUM canvas player di dalam gameScreen
-    // gameScreen adalah flex-row: sebelumnya [canvas][side-panel]
-    // sesudahnya: [AI-panel][canvas][side-panel]
-    const canvasWrap = canvas.parentElement;
-    gameScreen.insertBefore(panel, canvasWrap);
-    gameScreen.style.justifyContent = "center";
-    gameScreen.style.alignItems = "flex-start";
-    gameScreen.style.gap = "16px";
+    // Insert at the TOP of side-panel (before all existing children)
+    sidePanel.insertBefore(panel, sidePanel.firstChild);
+    // Size the AI canvas: fill panel width, height = width * 2 (10col × 20row ratio)
+    // But cap at 45% of board height so info blocks below always fit
+    const aiCanvas = panel.querySelector("#aiCanvas");
+    const panelW = Math.min(210, Math.round(window.innerWidth * 0.18));
+    const aiW = Math.max(80, panelW - 24);
+    // Cap height: at most 45% of the player board height to leave room for stats
+    const maxAiH = Math.floor(canvas.height * 0.45);
+    const aiH = Math.min(aiW * 2, maxAiH);
+    aiCanvas.width  = aiW;
+    aiCanvas.height = aiH;
+    // Reset game area styles (no extra gap needed)
+    gameScreen.style.justifyContent = "";
+    gameScreen.style.gap = "";
   } else {
     modeLabel.textContent  = "SINGLE PLAYER";
     modeLabel.style.borderColor = "";
@@ -862,7 +852,7 @@ let aiCurrentPiece = null;
 let aiNextPiece    = null;
 let aiPieceX = 0;
 let aiPieceY = 0;
-let aiDropInterval = 120;    // AI drops fast — feels superhuman
+let aiDropInterval = 60;    // AI drops very fast — superhuman speed
 let aiLastDrop = 0;
 let aiAnimFrameId = null;
 let aiRunning = false;
@@ -870,13 +860,17 @@ let aiMoveQueue = [];        // queued moves to animate (left/right/rotate)
 let aiMoveTimer = null;
 let aiGameOver = false;
 
-// ── AI Heuristic weights — BRUTAL MODE (Level 1) ──
+// ── AI Heuristic weights (NIGHTMARE MODE — near-unbeatable) ──
 const AI_WEIGHTS = {
-  linesCleared:    8.0,   // agresif clear, bonus Tetris (4 lines) = 32 pts weight
-  holes:          -8.5,   // lubang = hukuman terbesar
-  bumpiness:      -3.2,   // permukaan harus rata sempurna
-  aggregateHeight:-4.5,   // stack rendah selalu
-  wellDepth:       2.8,   // siapkan slot I-piece terus-menerus
+  linesCleared:    10.0,  // aggressively reward clearing lines
+  holes:          -12.0,  // annihilate holes — top priority
+  bumpiness:       -3.5,  // demand a flat surface
+  aggregateHeight: -4.5,  // stay very low at all times
+  wellDepth:        2.5,  // maintain I-piece well
+  coveredHoles:   -8.0,   // extra penalty for buried holes
+  rowTransitions: -3.2,   // penalize uneven rows
+  colTransitions: -4.0,   // penalize column gaps
+  tetrisReady:     6.0,   // reward near-Tetris setups
 };
 
 // Clone a board (2D array)
@@ -967,87 +961,132 @@ function getWellDepth(heights) {
   return total;
 }
 
+// Count cells with filled cells above AND below (buried holes — worse)
+function countCoveredHoles(b) {
+  let covered = 0;
+  for (let c = 0; c < COLS; c++) {
+    let blockAbove = false;
+    let depth = 0;
+    for (let r = 0; r < ROWS; r++) {
+      if (b[r][c]) { blockAbove = true; depth = 0; }
+      else if (blockAbove) { depth++; covered += depth; }
+    }
+  }
+  return covered;
+}
+
+// Row transitions: filled→empty or empty→filled in each row
+function getRowTransitions(b) {
+  let trans = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS - 1; c++) {
+      if (!!b[r][c] !== !!b[r][c+1]) trans++;
+    }
+    // borders count as filled
+    if (!b[r][0]) trans++;
+    if (!b[r][COLS-1]) trans++;
+  }
+  return trans;
+}
+
+// Column transitions: filled→empty or empty→filled in each column
+function getColTransitions(b) {
+  let trans = 0;
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS - 1; r++) {
+      if (!!b[r][c] !== !!b[r+1][c]) trans++;
+    }
+  }
+  return trans;
+}
+
+// Reward having exactly one well column of height >= 4 (Tetris ready)
+function getTetrisReadiness(heights) {
+  let minH = Math.min(...heights);
+  let minCount = heights.filter(h => h === minH).length;
+  let neighborMin = heights.filter((h, i) => {
+    const l = i > 0 ? heights[i-1] : 99;
+    const r = i < heights.length-1 ? heights[i+1] : 99;
+    return (l - h >= 3 && r - h >= 3);
+  }).length;
+  return minCount === 1 && neighborMin >= 1 ? 1 : 0;
+}
+
 // Evaluate a board state — higher is better
 function evaluateBoard(b, linesCleared) {
-  const heights  = getHeights(b);
-  const aggH     = heights.reduce((a, b) => a + b, 0);
-  const holes    = countHoles(b);
-  const bump     = getBumpiness(heights);
-  const well     = getWellDepth(heights);
+  const heights      = getHeights(b);
+  const aggH         = heights.reduce((a, v) => a + v, 0);
+  const holes        = countHoles(b);
+  const coveredHoles = countCoveredHoles(b);
+  const bump         = getBumpiness(heights);
+  const well         = getWellDepth(heights);
+  const rowTrans     = getRowTransitions(b);
+  const colTrans     = getColTransitions(b);
+  const tetrisReady  = getTetrisReadiness(heights);
+
+  // Extra penalty if stack is dangerously high
+  const maxH = Math.max(...heights);
+  const dangerPenalty = maxH > 14 ? (maxH - 14) * -8.0 : 0;
+
+  // Bonus for clearing 4 lines (Tetris)
+  const tetrisBonus = linesCleared === 4 ? 20 : 0;
+
   return (
-    AI_WEIGHTS.linesCleared    * linesCleared +
-    AI_WEIGHTS.holes           * holes        +
-    AI_WEIGHTS.bumpiness       * bump         +
-    AI_WEIGHTS.aggregateHeight * aggH         +
-    AI_WEIGHTS.wellDepth       * well
+    AI_WEIGHTS.linesCleared    * linesCleared  +
+    AI_WEIGHTS.holes           * holes         +
+    AI_WEIGHTS.coveredHoles    * coveredHoles  +
+    AI_WEIGHTS.bumpiness       * bump          +
+    AI_WEIGHTS.aggregateHeight * aggH          +
+    AI_WEIGHTS.wellDepth       * well          +
+    AI_WEIGHTS.rowTransitions  * rowTrans      +
+    AI_WEIGHTS.colTransitions  * colTrans      +
+    AI_WEIGHTS.tetrisReady     * tetrisReady   +
+    dangerPenalty + tetrisBonus
   );
 }
 
-// ── Level 2: helper — semua rotasi unik suatu shape ──
-function aiGetAllRotations(shape) {
-  const rotations = [];
-  const seen = new Set();
-  let s = shape;
-  for (let i = 0; i < 4; i++) {
-    const key = JSON.stringify(s);
-    if (!seen.has(key)) { seen.add(key); rotations.push(s); }
-    s = aiRotateShape(s);
-  }
-  return rotations;
-}
-
-// ── Level 2: simulasi satu placement — return { boardAfter, cleared } ──
-function aiSimulatePlacement(b, shape, x) {
-  const { y, valid } = aiDropPiece(b, shape, x);
-  if (!valid) return null;
-  const merged = aiMergePiece(b, shape, x, y, "#fff");
-  const { board: boardAfter, cleared } = aiClearLines(merged);
-  return { boardAfter, cleared };
-}
-
-// ── Level 2: 2-piece lookahead ──
-// Evaluasi setiap posisi piece SEKARANG, lalu untuk tiap hasilnya
-// evaluasi juga semua posisi piece BERIKUTNYA.
-// ~1600 evaluasi per piece, tetap < 5ms di browser modern.
+// Find the best move using 2-piece lookahead (current + next piece)
 function aiFindBestMove(b, piece) {
   let bestScore = -Infinity;
   let bestMove  = { rotations: 0, x: 0 };
+  let shape = piece.shape;
 
-  const currentRots = aiGetAllRotations(piece.shape);
+  for (let rot = 0; rot < 4; rot++) {
+    const w = shape[0].length;
+    for (let x = -1; x <= COLS - w + 1; x++) {
+      const { y, valid } = aiDropPiece(b, shape, x);
+      if (!valid) continue;
+      const merged = aiMergePiece(b, shape, x, y, piece.color);
+      const { board: cleared, cleared: numCleared } = aiClearLines(merged);
+      const immediate = evaluateBoard(cleared, numCleared);
 
-  currentRots.forEach((shape1, rot1) => {
-    const w1 = shape1[0].length;
-    for (let x1 = -1; x1 <= COLS - w1 + 1; x1++) {
-      const sim1 = aiSimulatePlacement(b, shape1, x1);
-      if (!sim1) continue;
-
-      // Skor dari piece pertama saja (baseline)
-      let score1 = evaluateBoard(sim1.boardAfter, sim1.cleared);
-
-      // Lookahead: evaluasi piece kedua di atas board hasil piece pertama
+      // ── 2-piece lookahead with next piece ──
+      let bestNext = -Infinity;
       if (aiNextPiece) {
-        let bestNext = -Infinity;
-        const nextRots = aiGetAllRotations(aiNextPiece.shape);
-        nextRots.forEach(shape2 => {
-          const w2 = shape2[0].length;
+        let nextShape = aiNextPiece.shape;
+        for (let rot2 = 0; rot2 < 4; rot2++) {
+          const w2 = nextShape[0].length;
           for (let x2 = -1; x2 <= COLS - w2 + 1; x2++) {
-            const sim2 = aiSimulatePlacement(sim1.boardAfter, shape2, x2);
-            if (!sim2) continue;
-            const s2 = evaluateBoard(sim2.boardAfter, sim2.cleared);
+            const { y: y2, valid: v2 } = aiDropPiece(cleared, nextShape, x2);
+            if (!v2) continue;
+            const m2 = aiMergePiece(cleared, nextShape, x2, y2, aiNextPiece.color);
+            const { board: c2, cleared: n2 } = aiClearLines(m2);
+            const s2 = evaluateBoard(c2, n2);
             if (s2 > bestNext) bestNext = s2;
           }
-        });
-        // Gabungkan: piece sekarang (bobot 1.0) + piece berikutnya (bobot 0.5)
-        score1 = score1 + 0.5 * bestNext;
+          nextShape = aiRotateShape(nextShape);
+        }
       }
 
-      if (score1 > bestScore) {
-        bestScore = score1;
-        bestMove  = { rotations: rot1, x: x1 };
+      // Weight: 60% immediate + 40% lookahead
+      const combined = immediate * 0.6 + (bestNext === -Infinity ? immediate : bestNext) * 0.4;
+      if (combined > bestScore) {
+        bestScore = combined;
+        bestMove  = { rotations: rot, x, y };
       }
     }
-  });
-
+    shape = aiRotateShape(shape);
+  }
   return bestMove;
 }
 
@@ -1095,8 +1134,8 @@ function aiProcessMoveQueue() {
 
   // Draw AI board after each step
   drawAiBoard();
-  // Continue queue with small delay so moves are visible
-  aiMoveTimer = setTimeout(aiProcessMoveQueue, 40);
+  // Continue queue with tiny delay — lightning fast moves
+  aiMoveTimer = setTimeout(aiProcessMoveQueue, 18);
 }
 
 function aiLockAndSpawn() {
@@ -1138,10 +1177,10 @@ function aiLockAndSpawn() {
     return;
   }
 
-  // Plan next move
+  // Plan next move — almost no pause between pieces
   if (aiRunning) {
     const move = aiFindBestMove(aiBoard, aiCurrentPiece);
-    setTimeout(() => aiExecuteMove(move), 180); // small pause between pieces
+    setTimeout(() => aiExecuteMove(move), 60); // near-instant next piece
   }
 }
 
@@ -1252,12 +1291,12 @@ function startAi() {
   aiPieceY       = 0;
   updateAiUI();
 
-  // Kick off first move after a short intro pause
+  // Kick off first move after a very short intro pause
   setTimeout(() => {
     if (!aiRunning) return;
     const move = aiFindBestMove(aiBoard, aiCurrentPiece);
     aiExecuteMove(move);
-  }, 600);
+  }, 200);
 }
 
 // ── Stop AI engine ──
