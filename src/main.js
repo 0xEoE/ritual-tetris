@@ -776,12 +776,8 @@ function setupGameScreenForMode(mode) {
     panel.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:8px; flex-shrink:1; min-height:0;";
     panel.innerHTML = `
       <div style="font-size:0.62rem; letter-spacing:3px; color:rgba(0,200,255,0.6); align-self:flex-start;">
-        // RITUAL_AI
+        // TETRIS_AI
       </div>
-      <div style="
-        font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35);
-        text-align:center; line-height:1.6; align-self:flex-start;
-      ">NIGHTMARE — 2-PLY LOOKAHEAD</div>
       <div style="position:relative; width:100%; flex-shrink:1; min-height:0;">
         <canvas id="aiCanvas"
           style="display:block; width:100%; max-width:100%; border:1px solid rgba(0,200,255,0.4);
