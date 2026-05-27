@@ -2,7 +2,7 @@
 //  RITUAL TETRIS — main.js  (AI Edition)
 //  + PVP Waiting Room + Live Opponent Board
 //  + Result Modal with Board Capture & Share to X
-//  + vs AI Mode (Pierre Dellacherie + 2-Piece Lookahead)
+//  + vs AI Mode (Pierre Dellacherie + 2-Piece Lookahead BRUTAL)
 // ══════════════════════════════════════════════
 
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.min.js";
@@ -697,6 +697,10 @@ function setupGameScreenForMode(mode) {
   // Remove any existing opponent panel
   const existing = document.getElementById("opponentPanel");
   if (existing) existing.remove();
+  // Reset gameScreen flex styles setiap kali mode berganti
+  gameScreen.style.justifyContent = "";
+  gameScreen.style.alignItems     = "";
+  gameScreen.style.gap            = "";
 
   if (mode === "pvp") {
     modeLabel.textContent  = "PVP ARENA";
@@ -758,71 +762,69 @@ function setupGameScreenForMode(mode) {
     modeLabel.style.color  = "#00ccff";
     modeLabel.style.background = "rgba(0,200,255,0.05)";
 
-    // ── Pendekatan: bungkus side-panel yang ada dengan wrapper flex-row,
-    // lalu sisipkan AI column di sebelah KIRI side-panel existing.
-    // side-panel existing tidak diubah sama sekali — hanya diberi wrapper.
-    const sidePanel = document.querySelector(".side-panel");
+    // ── Layout: [AI panel kiri] [board player tengah] [side-panel kanan] ──
+    // AI canvas: lebar = canvas.width / 2 (tampak mini tapi proporsional 1:2)
+    // Tinggi AI canvas = canvas.height (sama tinggi dengan board player)
+    const aiCanvasH = canvas.height;
+    const aiCanvasW = Math.floor(aiCanvasH / 2); // rasio Tetris 1:2
 
-    // Hitung ukuran AI canvas berdasarkan tinggi board player
-    // Rasio board = 10 col × 20 row = 1:2
-    // Lebar AI column = 90px, tinggi canvas = 180px (compact tapi proporsional)
-    const AI_COL_W  = 90;
-    const aiCanvasW = AI_COL_W - 8;            // 82px
-    const aiCanvasH = Math.floor(aiCanvasW * 2); // 164px — rasio 1:2
-
-    // Buat AI column
     const panel = document.createElement("div");
     panel.id = "opponentPanel";
     panel.style.cssText = `
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 5px;
-      width: ${AI_COL_W}px;
+      gap: 6px;
+      width: ${aiCanvasW + 24}px;
       flex-shrink: 0;
+      align-self: flex-start;
       padding-top: calc(0.6rem + 6px + 1em);
     `;
     panel.innerHTML = `
-      <div style="font-size:0.48rem; letter-spacing:2px; color:rgba(0,200,255,0.55); text-align:center; line-height:1.5;">
+      <div style="font-size:0.58rem; letter-spacing:3px; color:rgba(0,200,255,0.55);">
         // RITUAL_AI
+      </div>
+      <div style="font-size:0.48rem; letter-spacing:2px; color:rgba(0,200,255,0.3); line-height:1.5;">
+        PIERRE DELLACHERIE<br>ALGORITHM
       </div>
       <div style="position:relative;">
         <canvas id="aiCanvas" width="${aiCanvasW}" height="${aiCanvasH}"
           style="display:block;
                  border:1px solid rgba(0,200,255,0.4);
                  background:#000;
-                 box-shadow:0 0 12px rgba(0,200,255,0.15);
+                 box-shadow:0 0 20px rgba(0,200,255,0.15);
                  image-rendering:pixelated;">
         </canvas>
         <div style="
-          position:absolute; top:4px; right:4px;
-          width:6px; height:6px; border-radius:50%;
-          background:#00ccff; box-shadow:0 0 5px #00ccff;
+          position:absolute; top:6px; right:6px;
+          width:8px; height:8px; border-radius:50%;
+          background:#00ccff; box-shadow:0 0 8px #00ccff;
           animation:blink 1.2s infinite;
         "></div>
       </div>
-      <div style="width:100%; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:5px 6px;">
-        <div style="font-size:0.44rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:3px;">SCORE</div>
-        <div id="aiScoreVal" style="font-family:'Orbitron',monospace; font-size:0.72rem; font-weight:700; color:#00ccff; letter-spacing:1px;">00000</div>
+      <div style="border:1px solid rgba(0,200,255,0.2); background:#060606; padding:8px 10px;">
+        <div style="font-size:0.5rem; letter-spacing:2px; color:rgba(0,200,255,0.35); margin-bottom:5px;">// AI SCORE</div>
+        <div id="aiScoreVal" style="font-family:'Orbitron',monospace; font-size:1rem; font-weight:700; color:#00ccff; letter-spacing:2px;">00000</div>
       </div>
-      <div style="display:flex; gap:4px; width:100%;">
-        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:5px 6px;">
-          <div style="font-size:0.42rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:2px;">LV</div>
-          <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.68rem; font-weight:700; color:#00ccff;">01</div>
+      <div style="display:flex; gap:6px;">
+        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:7px 8px;">
+          <div style="font-size:0.46rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:3px;">LV</div>
+          <div id="aiLevelVal" style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700; color:#00ccff;">01</div>
         </div>
-        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:5px 6px;">
-          <div style="font-size:0.42rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:2px;">LNS</div>
-          <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.68rem; font-weight:700; color:#00ccff;">000</div>
+        <div style="flex:1; border:1px solid rgba(0,200,255,0.2); background:#060606; padding:7px 8px;">
+          <div style="font-size:0.46rem; letter-spacing:1px; color:rgba(0,200,255,0.35); margin-bottom:3px;">LINES</div>
+          <div id="aiLinesVal" style="font-family:'Orbitron',monospace; font-size:0.9rem; font-weight:700; color:#00ccff;">000</div>
         </div>
       </div>
     `;
 
-    // Sisipkan AI column SEBELUM side-panel (di sebelah kirinya)
-    // gameScreen adalah flex-row: [canvas-wrap][side-panel]
-    // Setelah insert: [canvas-wrap][AI-column][side-panel]
-    gameScreen.insertBefore(panel, sidePanel);
+    // Sisipkan AI panel SEBELUM canvas player di dalam gameScreen
+    // gameScreen adalah flex-row: sebelumnya [canvas][side-panel]
+    // sesudahnya: [AI-panel][canvas][side-panel]
+    const canvasWrap = canvas.parentElement;
+    gameScreen.insertBefore(panel, canvasWrap);
     gameScreen.style.justifyContent = "center";
-    gameScreen.style.gap = "12px";
+    gameScreen.style.alignItems = "flex-start";
+    gameScreen.style.gap = "16px";
   } else {
     modeLabel.textContent  = "SINGLE PLAYER";
     modeLabel.style.borderColor = "";
@@ -868,17 +870,12 @@ let aiMoveQueue = [];        // queued moves to animate (left/right/rotate)
 let aiMoveTimer = null;
 let aiGameOver = false;
 
-// ── AI Heuristic weights — BRUTAL MODE (Level 1 upgrade) ──
-// Bobot ini membuat AI hampir tidak bisa dikalahkan:
-//   • sangat agresif clear lines (Tetris = 4 baris sekaligus)
-//   • sangat menghindari lubang tersembunyi
-//   • selalu jaga permukaan rata
-//   • selalu siapkan 1 well di sisi kanan untuk I-piece
+// ── AI Heuristic weights — BRUTAL MODE (Level 1) ──
 const AI_WEIGHTS = {
   linesCleared:    8.0,   // agresif clear, bonus Tetris (4 lines) = 32 pts weight
   holes:          -8.5,   // lubang = hukuman terbesar
   bumpiness:      -3.2,   // permukaan harus rata sempurna
-  aggregateHeight:-4.5,   // stack rendah selalu (cegah board penuh)
+  aggregateHeight:-4.5,   // stack rendah selalu
   wellDepth:       2.8,   // siapkan slot I-piece terus-menerus
 };
 
@@ -986,12 +983,7 @@ function evaluateBoard(b, linesCleared) {
   );
 }
 
-// ── Level 2: 2-piece lookahead ──────────────────────────────
-// Untuk setiap posisi piece SEKARANG, evaluasi semua posisi
-// piece BERIKUTNYA di atas board hasilnya, lalu ambil kombinasi
-// terbaik. ~1600 evaluasi per piece, tetap < 5ms di browser modern.
-
-// Helper: kembalikan semua rotasi unik sebuah shape
+// ── Level 2: helper — semua rotasi unik suatu shape ──
 function aiGetAllRotations(shape) {
   const rotations = [];
   const seen = new Set();
@@ -1004,22 +996,24 @@ function aiGetAllRotations(shape) {
   return rotations;
 }
 
-// Evaluasi satu placement — return { boardAfter, linesCleared }
+// ── Level 2: simulasi satu placement — return { boardAfter, cleared } ──
 function aiSimulatePlacement(b, shape, x) {
   const { y, valid } = aiDropPiece(b, shape, x);
   if (!valid) return null;
-  const merged = aiMergePiece(b, shape, x, y, "#fff"); // warna tidak relevan
+  const merged = aiMergePiece(b, shape, x, y, "#fff");
   const { board: boardAfter, cleared } = aiClearLines(merged);
   return { boardAfter, cleared };
 }
 
-// 2-piece lookahead: evaluasi current piece + next piece
+// ── Level 2: 2-piece lookahead ──
+// Evaluasi setiap posisi piece SEKARANG, lalu untuk tiap hasilnya
+// evaluasi juga semua posisi piece BERIKUTNYA.
+// ~1600 evaluasi per piece, tetap < 5ms di browser modern.
 function aiFindBestMove(b, piece) {
   let bestScore = -Infinity;
   let bestMove  = { rotations: 0, x: 0 };
 
   const currentRots = aiGetAllRotations(piece.shape);
-  const nextPieceObj = aiNextPiece; // piece berikutnya (global)
 
   currentRots.forEach((shape1, rot1) => {
     const w1 = shape1[0].length;
@@ -1027,13 +1021,13 @@ function aiFindBestMove(b, piece) {
       const sim1 = aiSimulatePlacement(b, shape1, x1);
       if (!sim1) continue;
 
-      // Score dari piece pertama saja (sebagai baseline)
+      // Skor dari piece pertama saja (baseline)
       let score1 = evaluateBoard(sim1.boardAfter, sim1.cleared);
 
-      // ── Lookahead: evaluasi piece kedua di atas board hasil piece pertama
-      if (nextPieceObj) {
+      // Lookahead: evaluasi piece kedua di atas board hasil piece pertama
+      if (aiNextPiece) {
         let bestNext = -Infinity;
-        const nextRots = aiGetAllRotations(nextPieceObj.shape);
+        const nextRots = aiGetAllRotations(aiNextPiece.shape);
         nextRots.forEach(shape2 => {
           const w2 = shape2[0].length;
           for (let x2 = -1; x2 <= COLS - w2 + 1; x2++) {
@@ -1043,9 +1037,7 @@ function aiFindBestMove(b, piece) {
             if (s2 > bestNext) bestNext = s2;
           }
         });
-        // Gabungkan skor: piece pertama (bobot 1.0) + piece kedua (bobot 0.5)
-        // Bobot 0.5 pada next piece agar AI tidak terlalu "berkorban" saat ini
-        // demi setup yang belum tentu terjadi
+        // Gabungkan: piece sekarang (bobot 1.0) + piece berikutnya (bobot 0.5)
         score1 = score1 + 0.5 * bestNext;
       }
 
@@ -2512,7 +2504,7 @@ document.addEventListener("keydown", e => {
   bgAnimate();
 })();
 
-console.log("%c🎮 Ritual Tetris — AI BRUTAL Edition (L1+L2) Loaded", "color:#00ff9d; font-size:16px");
+console.log("%c🎮 Ritual Tetris — AI Edition Loaded", "color:#00ff9d; font-size:16px");
 
 // ── RESPONSIVE CANVAS RESIZE ──────────────────
 window.addEventListener("resize", () => {
