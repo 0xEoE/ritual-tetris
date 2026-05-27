@@ -698,6 +698,17 @@ function setupGameScreenForMode(mode) {
   const existing = document.getElementById("opponentPanel");
   if (existing) existing.remove();
 
+  // Hide TARGET progress bar for vs-ai and pvp; show only for single player
+  const scoreBarWrap   = document.getElementById("scoreBarWrap");
+  const scoreTargetLbl = document.getElementById("scoreTargetLabel");
+  if (mode === "vs-ai" || mode === "pvp") {
+    if (scoreBarWrap)   scoreBarWrap.style.display   = "none";
+    if (scoreTargetLbl) scoreTargetLbl.style.display = "none";
+  } else {
+    if (scoreBarWrap)   scoreBarWrap.style.display   = "";
+    if (scoreTargetLbl) scoreTargetLbl.style.display = "";
+  }
+
   if (mode === "pvp") {
     modeLabel.textContent  = "PVP ARENA";
     modeLabel.style.borderColor = "rgba(255,0,204,0.3)";
