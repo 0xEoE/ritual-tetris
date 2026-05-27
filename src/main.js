@@ -698,6 +698,12 @@ function setupGameScreenForMode(mode) {
   const existing = document.getElementById("opponentPanel");
   if (existing) existing.remove();
 
+  // Hide/show ACTIVE PROTOCOL block for vs-ai mode
+  const activeProtocolBlock = document.querySelector(".side-panel .panel-block:first-of-type");
+  if (activeProtocolBlock) {
+    activeProtocolBlock.style.display = mode === "vs-ai" ? "none" : "";
+  }
+
   // Hide TARGET progress bar for vs-ai and pvp; show only for single player
   const scoreBarWrap   = document.getElementById("scoreBarWrap");
   const scoreTargetLbl = document.getElementById("scoreTargetLabel");
