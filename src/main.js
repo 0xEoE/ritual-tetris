@@ -1551,6 +1551,186 @@ function renderBoardSnapshot() {
 
 // ── SHARE TO X ────────────────────────────────
 async function shareToX() {
+  if (currentMode === "vs-ai") {
+    shareToX_VsAi();
+  } else {
+    shareToX_Default();
+  }
+}
+
+// ── VS AI share card — comparison layout ──────
+function shareToX_VsAi() {
+  const snapCanvas = document.getElementById("resultBoardCanvas");
+  if (!snapCanvas) return;
+
+  const W = 520, H = 640;
+  const shareCanvas = document.createElement("canvas");
+  shareCanvas.width  = W;
+  shareCanvas.height = H;
+  const sc = shareCanvas.getContext("2d");
+
+  const aiWon  = aiScore > score;
+  const isDraw = aiScore === score;
+  const resultLabel = isDraw ? "DRAW" : aiWon ? "AI WINS" : "YOU WIN!";
+  const resultColor = isDraw ? "#ffcc00" : aiWon ? "#ff3366" : "#00ff9d";
+
+  // ── Background ──
+  sc.fillStyle = "#040404";
+  sc.fillRect(0, 0, W, H);
+
+  // Scanlines
+  for (let y = 0; y < H; y += 4) {
+    sc.fillStyle = "rgba(0,0,0,0.07)";
+    sc.fillRect(0, y, W, 2);
+  }
+
+  // Outer border (AI cyan theme)
+  sc.strokeStyle = "#00ccff";
+  sc.lineWidth = 1.5;
+  sc.strokeRect(8, 8, W - 16, H - 16);
+  sc.strokeStyle = "rgba(0,200,255,0.3)";
+  sc.lineWidth = 1;
+  sc.strokeRect(13, 13, W - 26, H - 26);
+
+  // ── Header tag ──
+  sc.fillStyle = "rgba(0,200,255,0.4)";
+  sc.font = "10px 'Courier New'";
+  sc.letterSpacing = "3px";
+  sc.fillText("// VS AI RESULT", 28, 42);
+
+  // ── Result title ──
+  sc.shadowColor = resultColor;
+  sc.shadowBlur  = 24;
+  sc.fillStyle   = resultColor;
+  sc.font = "bold 48px 'Courier New'";
+  sc.letterSpacing = "4px";
+  sc.fillText(resultLabel, 28, 96);
+  sc.shadowBlur = 0;
+
+  // Divider
+  sc.strokeStyle = "rgba(0,200,255,0.2)";
+  sc.lineWidth = 1;
+  sc.beginPath(); sc.moveTo(28, 112); sc.lineTo(W - 28, 112); sc.stroke();
+
+  // ── Score comparison row ──
+  const rowY = 120;
+  const colW = (W - 56) / 2;
+  const midX = W / 2;
+
+  // YOU column
+  sc.fillStyle = "rgba(204,255,0,0.4)";
+  sc.font = "9px 'Courier New'";
+  sc.letterSpacing = "3px";
+  sc.textAlign = "center";
+  sc.fillText("YOU", midX - colW / 2, rowY + 24);
+
+  sc.fillStyle = aiWon && !isDraw ? "#ccff00" : "#00ff9d";
+  sc.font = "bold 32px 'Courier New'";
+  sc.letterSpacing = "1px";
+  sc.fillText(String(score).padStart(5, "0"), midX - colW / 2, rowY + 62);
+
+  sc.fillStyle = "rgba(204,255,0,0.4)";
+  sc.font = "9px 'Courier New'";
+  sc.letterSpacing = "2px";
+  sc.fillText(`${lines} LINES · LV${level}`, midX - colW / 2, rowY + 82);
+
+  // VS badge
+  sc.fillStyle = "rgba(255,255,255,0.15)";
+  sc.font = "bold 14px 'Courier New'";
+  sc.letterSpacing = "1px";
+  sc.fillText("VS", midX, rowY + 52);
+
+  // TETRIS AI column
+  sc.fillStyle = "rgba(0,200,255,0.6)";
+  sc.font = "9px 'Courier New'";
+  sc.letterSpacing = "3px";
+  sc.fillText("TETRIS AI", midX + colW / 2, rowY + 24);
+
+  sc.fillStyle = !aiWon && !isDraw ? "#ccff00" : "#00ccff";
+  sc.font = "bold 32px 'Courier New'";
+  sc.letterSpacing = "1px";
+  sc.fillText(String(aiScore).padStart(5, "0"), midX + colW / 2, rowY + 62);
+
+  sc.fillStyle = "rgba(0,200,255,0.4)";
+  sc.font = "9px 'Courier New'";
+  sc.letterSpacing = "2px";
+  sc.fillText(`${aiLines} LINES`, midX + colW / 2, rowY + 82);
+
+  sc.textAlign = "left";
+
+  // Divider
+  sc.strokeStyle = "rgba(0,200,255,0.2)";
+  sc.lineWidth = 1;
+  sc.beginPath(); sc.moveTo(28, rowY + 100); sc.lineTo(W - 28, rowY + 100); sc.stroke();
+
+  // ── Board snapshot (centered) ──
+  const boardAreaY = rowY + 112;
+  const boardLabel = "// FINAL BOARD STATE";
+  sc.fillStyle = "rgba(0,200,255,0.3)";
+  sc.font = "9px 'Courier New'";
+  sc.letterSpacing = "3px";
+  sc.textAlign = "center";
+  sc.fillText(boardLabel, W / 2, boardAreaY + 14);
+  sc.textAlign = "left";
+
+  const boardW = snapCanvas.width;
+  const boardH = snapCanvas.height;
+  const maxBW  = W - 80;
+  const maxBH  = H - boardAreaY - 60;
+  const bScale = Math.min(maxBW / boardW, maxBH / boardH);
+  const bw = boardW * bScale;
+  const bh = boardH * bScale;
+  const bx = (W - bw) / 2;
+  const by = boardAreaY + 24;
+
+  // Board glow border
+  sc.shadowColor = "#00ccff";
+  sc.shadowBlur  = 12;
+  sc.strokeStyle = "rgba(0,200,255,0.5)";
+  sc.lineWidth   = 1.5;
+  sc.strokeRect(bx - 2, by - 2, bw + 4, bh + 4);
+  sc.shadowBlur  = 0;
+
+  sc.drawImage(snapCanvas, bx, by, bw, bh);
+
+  // ── Footer ──
+  sc.fillStyle = "rgba(0,200,255,0.3)";
+  sc.font = "9px 'Courier New'";
+  sc.letterSpacing = "1px";
+  sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, H - 18);
+
+  // ── Tweet text ──
+  const resultStr = isDraw ? "🤝 Draw vs AI" : aiWon ? "🤖 AI Wins!" : "🏆 I Beat the AI!";
+  const tweet = encodeURIComponent(
+    `${resultStr}\n` +
+    `Me: ${String(score).padStart(5,"0")} pts · ${lines} lines · LV${level}\n` +
+    `TETRIS AI: ${String(aiScore).padStart(5,"0")} pts · ${aiLines} lines\n\n` +
+    `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
+    `🕹️ https://ritual-tetris.vercel.app/\n\n` +
+    `@0xEyesofEtresia @Ritualnet #RitualTestnet`
+  );
+
+  const twitterWindow = window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
+  if (!twitterWindow) {
+    const shareBtn = document.getElementById("shareXBtn");
+    if (shareBtn) {
+      shareBtn.innerHTML = `<a href="https://x.com/intent/tweet?text=${tweet}" target="_blank" style="color:inherit;text-decoration:none;">𝕏 OPEN TWITTER (click here)</a>`;
+    }
+  }
+
+  shareCanvas.toBlob((blob) => {
+    if (!blob) return;
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = `ritual-tetris-vsai-${Date.now()}.png`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+// ── Default share card (Single / PVP) ─────────
+function shareToX_Default() {
   const snapCanvas = document.getElementById("resultBoardCanvas");
   if (!snapCanvas) return;
 
@@ -1647,8 +1827,7 @@ async function shareToX() {
 
   // Result badge
   const isPvp  = currentMode === "pvp";
-  const isVsAi = currentMode === "vs-ai";
-  const won    = (isPvp || isVsAi) ? score >= opponentScore : score >= TARGET;
+  const won    = isPvp ? score >= opponentScore : score >= TARGET;
   sc.fillStyle = won ? "rgba(0,255,157,0.1)" : "rgba(255,51,102,0.1)";
   sc.strokeStyle = won ? "#00ff9d" : "#ff3366";
   sc.lineWidth = 1;
@@ -1669,7 +1848,7 @@ async function shareToX() {
   sc.fillStyle = "#ffcc00";
   sc.font = "9px 'Courier New'";
   sc.textAlign = "center";
-  sc.fillText(isPvp ? "PVP ARENA" : isVsAi ? "VS AI" : "SOLO MODE", sx + sw / 2, sy + 280);
+  sc.fillText(isPvp ? "PVP ARENA" : "SOLO MODE", sx + sw / 2, sy + 280);
   sc.textAlign = "left";
 
   // Footer
@@ -1678,12 +1857,8 @@ async function shareToX() {
   sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, 494);
 
   // Build tweet text
-  const modeStr  = currentMode === "pvp" ? "PVP Arena" : currentMode === "vs-ai" ? "vs AI" : "Solo Mode";
-  const resultStr = currentMode === "vs-ai"
-    ? (score > opponentScore ? "🤖 Beat the AI!" : score === opponentScore ? "🤝 Draw vs AI" : "🤖 AI Wins")
-    : (currentMode === "pvp" ? score >= opponentScore : score >= TARGET)
-      ? "🏆 VICTORY"
-      : "💀 Game Over";
+  const modeStr   = isPvp ? "PVP Arena" : "Solo Mode";
+  const resultStr = (isPvp ? score >= opponentScore : score >= TARGET) ? "🏆 VICTORY" : "💀 Game Over";
   const tweet = encodeURIComponent(
     `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
     `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
@@ -1693,17 +1868,14 @@ async function shareToX() {
     `#RitualTestnet`
   );
 
-  // Open Twitter IMMEDIATELY (synchronous, before any async) to avoid popup blocker
   const twitterWindow = window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
   if (!twitterWindow) {
-    // If popup was blocked, show a fallback link in the modal
     const shareBtn = document.getElementById("shareXBtn");
     if (shareBtn) {
       shareBtn.innerHTML = `<a href="https://x.com/intent/tweet?text=${tweet}" target="_blank" style="color:inherit;text-decoration:none;">𝕏 OPEN TWITTER (click here)</a>`;
     }
   }
 
-  // Download the share image (async is fine for download)
   shareCanvas.toBlob((blob) => {
     if (!blob) return;
     const url  = URL.createObjectURL(blob);
