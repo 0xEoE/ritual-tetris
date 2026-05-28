@@ -1700,14 +1700,14 @@ function shareToX_VsAi() {
   sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, H - 18);
 
   // ── Tweet text ──
-  const resultStr = isDraw ? "🤝 Draw vs AI" : aiWon ? "🤖 AI Wins!" : "🏆 I Beat the AI!";
+  const resultStr = isDraw ? "🤝 Draw!" : aiWon ? "🤖 AI Wins!" : "🏆 I Beat the AI!";
   const tweet = encodeURIComponent(
     `${resultStr}\n` +
     `Me: ${String(score).padStart(5,"0")} pts · ${lines} lines · LV${level}\n` +
     `TETRIS AI: ${String(aiScore).padStart(5,"0")} pts · ${aiLines} lines\n\n` +
-    `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
-    `🕹️ https://ritual-tetris.vercel.app/\n\n` +
-    `@0xEyesofEtresia @Ritualnet #RitualTestnet`
+    `Playing RITUAL TETRIS on-chain! 🎮\n` +
+    `Play now: ritual-tetris.vercel.app\n` +
+    `@Jez_Cryptoz @ritualnet #ritualtestnet`
   );
 
   const twitterWindow = window.open(`https://x.com/intent/tweet?text=${tweet}`, "_blank");
