@@ -1358,7 +1358,7 @@ function showResult(mode) {
     headerColor = "#ff3366";
   }
 
-  const oppLabel  = isVsAi ? "RITUAL AI" : "OPPONENT";
+  const oppLabel  = isVsAi ? "TETRIS AI" : "OPPONENT";
   const oppColor  = isVsAi ? "#00ccff"   : "#ff00cc";
   const pvpRows = (isPvp || isVsAi) ? `
     <div class="result-vs-row">
