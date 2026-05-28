@@ -57,11 +57,11 @@ async function switchToRitualTestnet() {
         });
         return true;
       } catch (addErr) {
-        console.warn("Gagal menambahkan Ritual Testnet:", addErr.message);
+        console.warn("Failed to add Ritual Testnet:", addErr.message);
         return false;
       }
     }
-    console.warn("Gagal switch network:", err.message);
+    console.warn("Failed to switch network:", err.message);
     return false;
   }
 }
@@ -311,7 +311,7 @@ const COLS    = 10;
 const ROWS    = 20;
 const TARGET  = 9999;
 
-// BLOCK size dihitung dinamis berdasarkan ruang layar yang tersedia
+// BLOCK size calculated dynamically based on available screen space
 let BLOCK = 30;
 
 function resizeCanvas() {
@@ -604,7 +604,7 @@ function gameLoop(timestamp) {
 
 // ── START GAME ────────────────────────────────
 function startGame(mode) {
-  resizeCanvas(); // ← sesuaikan ukuran canvas dengan layar saat ini
+  resizeCanvas(); // ← adjust canvas size to current screen
   currentMode  = mode;
   board        = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   score = 0; level = 1; lines = 0; dropInterval = 800; paused = false;
@@ -1875,7 +1875,7 @@ let matchmakeTimer = null;
 let waitingLobbyListener = null; // SSE listener for lobby status
 let waitingElapsed = 0;
 let waitingTickInterval = null;
-let hostOnChainMatchId = null; // on-chain matchId milik host, dipakai untuk refund
+let hostOnChainMatchId = null; // on-chain matchId owned by host, used for refund
 
 async function showPvpWaiting() {
   let overlay = document.getElementById("pvpWaitingOverlay");
@@ -1961,10 +1961,10 @@ async function showPvpWaiting() {
           pvpRole    = "guest";
           document.getElementById("pvpMatchIdDisplay").textContent = pvpMatchId;
 
-          // Ambil onChainMatchId yang disimpan host
+          // Retrieve onChainMatchId stored by host
           const onChainMatchId = lobbyData.onChainMatchId;
           if (onChainMatchId === undefined || onChainMatchId === null) {
-            console.warn("onChainMatchId tidak ditemukan di lobby data");
+            console.warn("onChainMatchId not found in lobby data");
             joinedExisting = false;
             break;
           }
@@ -1982,9 +1982,9 @@ async function showPvpWaiting() {
             break;
           }
 
-          // Hapus dari lobby setelah berhasil join
+          // Remove from lobby after successful join
           await FB.remove(`lobbies/open/${pvpMatchId}`);
-          // Beritahu host bahwa guest sudah join
+          // Notify host that guest has joined
           await sendPvpUpdate("OPPONENT_JOINED", {
             guestAddr:      myWalletAddr || "anonymous",
             onChainMatchId: onChainMatchId,
@@ -2007,17 +2007,17 @@ async function showPvpWaiting() {
   if (!joinedExisting) {
     // ── STEP 2: No open lobby found — become the host, post our lobby ──
     pvpRole = "host";
-    // pvpMatchId sudah di-set on-chain oleh payEntry() — jangan overwrite dengan string
-    const onChainMatchId = pvpMatchId; // integer dari contract
-    hostOnChainMatchId   = onChainMatchId; // simpan ke module scope untuk cancel & timeout
-    // Firebase key tidak boleh angka murni, pakai prefix "M"
+    // pvpMatchId already set on-chain by payEntry() — do not overwrite with string
+    const onChainMatchId = pvpMatchId; // integer from contract
+    hostOnChainMatchId   = onChainMatchId; // store in module scope for cancel & timeout
+    // Firebase key must not be a plain number, use prefix "M"
     const fbLobbyKey = `M${onChainMatchId}`;
     document.getElementById("pvpMatchIdDisplay").textContent = fbLobbyKey;
 
     try {
       await FB.set(`lobbies/open/${fbLobbyKey}`, {
         hostAddr:      myWalletAddr || "anonymous",
-        onChainMatchId: onChainMatchId,  // ← guest butuh ini untuk joinPvPMatch di contract
+        onChainMatchId: onChainMatchId,  // ← guest needs this to call joinPvPMatch on contract
         ts:            Date.now(),
       });
     } catch(e) {
@@ -2051,7 +2051,7 @@ async function showPvpWaiting() {
 
       if (waitingElapsed >= MATCHMAKE_TIMEOUT_MS) {
         clearInterval(waitingTickInterval);
-        onMatchmakeTimeout(hostOnChainMatchId); // kirim onChainMatchId untuk refund
+        onMatchmakeTimeout(hostOnChainMatchId); // send onChainMatchId for refund
       }
     }, 1000);
   }
@@ -2070,7 +2070,7 @@ async function showPvpWaiting() {
     clearTimeout(matchmakeTimer);
 
     if (pvpRole === "host" && pvpMatchId) {
-      // Hapus lobby dari Firebase
+      // Remove lobby from Firebase
       await FB.remove(`lobbies/open/${pvpMatchId}`).catch(() => {});
 
       // Refund via contract menggunakan hostOnChainMatchId (module scope)
@@ -2079,14 +2079,14 @@ async function showPvpWaiting() {
           updatePvpStatus("PROCESSING REFUND…", "#ffcc00");
           const tx = await contract.cancelPvPMatch(hostOnChainMatchId);
           await tx.wait();
-          updatePvpStatus("REFUND 0.005 RITUAL BERHASIL ✓", "#00ff9d");
+          updatePvpStatus("REFUND 0.005 RITUAL SUCCESSFUL ✓", "#00ff9d");
           await new Promise(r => setTimeout(r, 1500));
         } catch(e) {
           const isRejected = e.code === 4001
             || e.code === "ACTION_REJECTED"
             || (e.message && e.message.toLowerCase().includes("user denied"))
             || (e.message && e.message.toLowerCase().includes("user rejected"));
-          if (!isRejected) console.warn("Refund gagal saat cancel:", e.message);
+          if (!isRejected) console.warn("Refund failed during cancel:", e.message);
         }
       }
     }
@@ -2114,14 +2114,14 @@ async function onMatchmakeTimeout(onChainMatchId) {
     try {
       const tx = await contract.cancelPvPMatch(onChainMatchId);
       await tx.wait();
-      updatePvpStatus("REFUND 0.005 RITUAL BERHASIL ✓", "#00ff9d");
+      updatePvpStatus("REFUND 0.005 RITUAL SUCCESSFUL ✓", "#00ff9d");
     } catch(e) {
       const isRejected = e.code === 4001
         || e.code === "ACTION_REJECTED"
         || (e.message && e.message.toLowerCase().includes("user denied"))
         || (e.message && e.message.toLowerCase().includes("user rejected"));
-      if (!isRejected) console.warn("Refund gagal:", e.message);
-      updatePvpStatus("REFUND DIBATALKAN", "#ff3366");
+      if (!isRejected) console.warn("Refund failed:", e.message);
+      updatePvpStatus("REFUND CANCELLED", "#ff3366");
     }
   }
 
@@ -2406,20 +2406,20 @@ async function payEntry(mode) {
         } catch (_) {}
       }
       if (foundMatchId === null) {
-        console.warn("Gagal mendapatkan Match ID dari contract.");
+        console.warn("Failed to retrieve Match ID from contract.");
         return false;
       }
       pvpMatchId = Number(foundMatchId);
     }
     return true;
   } catch(e) {
-    // Jika user sengaja reject di MetaMask — diam saja, tidak perlu popup
+    // If user intentionally rejected in MetaMask — stay silent, no popup needed
     const isRejected = e.code === 4001
       || e.code === "ACTION_REJECTED"
       || (e.message && e.message.toLowerCase().includes("user denied"))
       || (e.message && e.message.toLowerCase().includes("user rejected"));
     if (!isRejected) {
-      console.warn("Transaksi gagal:", e.message);
+      console.warn("Transaction failed:", e.message);
     }
     return false;
   }
@@ -2428,7 +2428,7 @@ async function payEntry(mode) {
 async function claimSingleReward() {
   try {
     const addr = await signer.getAddress();
-    // Ambil nonce terkini dari contract — mencegah double-claim
+    // Fetch current nonce from contract — prevents double-claim
     const nonce = await contract.claimNonce(addr);
     const tx = await contract.claimSinglePlayerReward(score, nonce);
     await tx.wait();
