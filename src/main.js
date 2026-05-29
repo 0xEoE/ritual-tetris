@@ -1558,8 +1558,18 @@ async function shareToX() {
   }
 }
 
+// ── Helper: load an image and return a Promise<HTMLImageElement> ──
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload  = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load image: " + src));
+    img.src = src;
+  });
+}
+
 // ── VS AI share card — comparison layout ──────
-function shareToX_VsAi() {
+async function shareToX_VsAi() {
   const snapCanvas = document.getElementById("resultBoardCanvas");
   if (!snapCanvas) return;
 
@@ -1699,6 +1709,19 @@ function shareToX_VsAi() {
   sc.letterSpacing = "1px";
   sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, H - 18);
 
+  // ── Ritual Logo (top-right corner) ──
+  try {
+    const logo = await loadImage("/ritual-logo.png");
+    const logoH = 36;
+    const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight));
+    const logoX = W - logoW - 24;
+    const logoY = 20;
+    sc.save();
+    sc.globalAlpha = 0.85;
+    sc.drawImage(logo, logoX, logoY, logoW, logoH);
+    sc.restore();
+  } catch (_) { /* logo optional — skip silently if not found */ }
+
   // ── Tweet text ──
   const resultStr = isDraw ? "🤝 Draw!" : aiWon ? "🤖 AI Wins!" : "🏆 I Beat the AI!";
   const tweet = encodeURIComponent(
@@ -1730,7 +1753,7 @@ function shareToX_VsAi() {
 }
 
 // ── Default share card (Single / PVP) ─────────
-function shareToX_Default() {
+async function shareToX_Default() {
   const snapCanvas = document.getElementById("resultBoardCanvas");
   if (!snapCanvas) return;
 
@@ -1855,6 +1878,19 @@ function shareToX_Default() {
   sc.fillStyle = "rgba(0,255,157,0.3)";
   sc.font = "9px 'Courier New'";
   sc.fillText("RITUAL TETRIS  |  ritual-tetris.vercel.app", 28, 494);
+
+  // ── Ritual Logo (top-right corner) ──
+  try {
+    const logo = await loadImage("/ritual-logo.png");
+    const logoH = 36;
+    const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight));
+    const logoX = 600 - logoW - 24;
+    const logoY = 20;
+    sc.save();
+    sc.globalAlpha = 0.85;
+    sc.drawImage(logo, logoX, logoY, logoW, logoH);
+    sc.restore();
+  } catch (_) { /* logo optional — skip silently if not found */ }
 
   // Build tweet text
   const modeStr   = isPvp ? "PVP Arena" : "Solo Mode";
