@@ -1789,7 +1789,7 @@ async function shareToX_Default() {
 
   sc.fillStyle = "#ccff00";
   sc.font = "bold 28px 'Courier New', monospace";
-  sc.fillText("[RITUAL] TETRIS", 28, 72);
+  sc.fillText("RITUAL TETRIS", 28, 72);
 
   // Divider
   sc.strokeStyle = "rgba(0,255,157,0.25)";
@@ -1897,7 +1897,7 @@ async function shareToX_Default() {
   const resultStr = (isPvp ? score >= opponentScore : score >= TARGET) ? "🏆 VICTORY" : "💀 Game Over";
   const tweet = encodeURIComponent(
     `${resultStr} — ${String(score).padStart(5,"0")} pts · LV${level} · ${lines} lines\n` +
-    `Playing [RITUAL] TETRIS on-chain! 🎮⛓️\n` +
+    `Playing RITUAL TETRIS on-chain! 🎮⛓️\n` +
     `Mode: ${modeStr} | Network: Ritual Testnet\n\n` +
     `🕹️ Play here: https://ritual-tetris.vercel.app/\n\n` +
     `@0xEyesofEtresia @Ritualnet\n` +
